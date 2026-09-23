@@ -62,7 +62,6 @@ credentials/
 # Local runtime data
 documents/
 !documents/.gitkeep
-storage/
 output/
 uploads/
 tmp/
