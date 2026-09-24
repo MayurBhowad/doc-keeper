@@ -2,13 +2,13 @@
 
 A small developer-focused Document Reader and AI Extraction engine.
 
-The goal is to build the core document-processing engine first, then progressively introduce AI, OCR, validation, APIs, and production infrastructure.
-
 ---
 
-## 1. Project Goal
+# 1. Project Goal
 
-Build a system that can:
+The goal is to build the core document-processing engine first, then progressively introduce AI, OCR, validation, APIs, and production infrastructure.
+
+The system should be able to:
 
 ```text
 Document
@@ -30,9 +30,11 @@ Initial example:
 invoice.pdf
 
 User:
+
 "Give me the invoice number, vendor name and total."
 
 System:
+
 {
   "invoice_number": "INV-123",
   "vendor_name": "ABC Pvt Ltd",
@@ -74,34 +76,35 @@ The first priority is making the **core extraction engine work correctly**.
 # 3. Current Architecture
 
 ```text
-                    Document
-                       │
-                       ▼
-                ┌─────────────┐
-                │   Reader    │
-                └──────┬──────┘
-                       │
-                       ▼
-                DocumentContent
-                       │
-                       │
-             User Extraction Request
-                       │
-                       ▼
-                ┌─────────────┐
-                │  Extractor  │
-                └──────┬──────┘
-                       │
-                       ▼
-                ExtractionResult
-                       │
-                       ▼
-                ┌─────────────┐
-                │   Storage   │
-                └─────────────┘
-                       │
-                       ▼
-                     JSON
+                     Document
+                         │
+                         ▼
+                  ┌─────────────┐
+                  │   Reader    │
+                  └──────┬──────┘
+                         │
+                         ▼
+                  DocumentContent
+                         │
+                         │
+                  User Extraction
+                      Request
+                         │
+                         ▼
+                  ┌─────────────┐
+                  │  Extractor  │
+                  └──────┬──────┘
+                         │
+                         ▼
+                  ExtractionResult
+                         │
+                         ▼
+                  ┌─────────────┐
+                  │   Storage   │
+                  └──────┬──────┘
+                         │
+                         ▼
+                        JSON
 ```
 
 The central orchestrator is:
@@ -130,12 +133,12 @@ Output:
 DocumentContent
 ```
 
-Readers:
+Current readers:
 
 ```text
 Reader
 ├── TextReader
-└── PdfReader
+└── PDFReader
 ```
 
 Future:
@@ -159,7 +162,7 @@ Reader must NOT:
 
 Represents the content extracted from a document.
 
-Initial model:
+Current model:
 
 ```python
 DocumentContent(
@@ -212,7 +215,7 @@ Request:
 "Give me invoice number and total."
 ```
 
-Result:
+Expected result:
 
 ```json
 {
@@ -221,7 +224,14 @@ Result:
 }
 ```
 
-Future implementations:
+Current implementations:
+
+```text
+Extractor
+└── FakeExtractor
+```
+
+Planned implementations:
 
 ```text
 Extractor
@@ -237,7 +247,7 @@ Extractor
 
 Represents what the user wants from the document.
 
-Initial version:
+Current version:
 
 ```python
 ExtractionRequest(
@@ -263,7 +273,7 @@ ExtractionRequest(
 
 Represents the extracted information.
 
-Initial version:
+Current version:
 
 ```python
 ExtractionResult(
@@ -292,7 +302,7 @@ ExtractionResult
 
 Responsible only for persistence.
 
-Initial:
+Current:
 
 ```text
 JsonStorage
@@ -349,10 +359,10 @@ Individual components own their own responsibilities.
 
 # 6. Project Structure
 
-Target structure:
+Current target structure:
 
 ```text
-document-reader/
+doc-keeper/
 │
 ├── src/
 │   └── document_reader/
@@ -365,12 +375,12 @@ document-reader/
 │       ├── readers/
 │       │   ├── base.py
 │       │   ├── text.py
-│       │   └── pdf.py
+│       │   ├── pdf.py
+│       │   └── registry.py
 │       │
 │       ├── extractors/
 │       │   ├── base.py
-│       │   ├── fake.py
-│       │   └── llm.py
+│       │   └── fake.py
 │       │
 │       ├── storage/
 │       │   └── json.py
@@ -382,7 +392,9 @@ document-reader/
 ├── output/
 │
 ├── tests/
+│   ├── test_domain.py
 │   ├── test_readers.py
+│   ├── test_extraction.py
 │   ├── test_extractors.py
 │   └── test_engine.py
 │
@@ -397,6 +409,8 @@ document-reader/
 
 ## Phase 1 — Core Reader
 
+**Status: COMPLETE**
+
 Goal:
 
 ```text
@@ -407,7 +421,7 @@ Reader
 DocumentContent
 ```
 
-Tasks:
+Completed:
 
 * [x] Create project
 * [x] Create basic text reader
@@ -415,23 +429,29 @@ Tasks:
 * [x] Create basic storage
 * [x] Create initial engine
 * [x] Add basic tests
-* [ ] Refactor readers into separate classes
-* [ ] Create `Document` model
-* [ ] Create `DocumentContent` model
+* [x] Refactor readers into separate classes
+* [x] Create `Document` model
+* [x] Create `DocumentContent` model
+* [x] Create reader abstraction
+* [x] Create `ReaderRegistry`
+* [x] Integrate reader abstraction with engine
+* [x] Add reader/domain/engine integration tests
 
 Acceptance criteria:
 
 ```text
-TXT can be read.
-PDF can be read.
-Missing files fail correctly.
-Unsupported files fail correctly.
-Tests pass.
+TXT can be read.                 ✓
+PDF can be read.                 ✓
+Missing files fail correctly.    ✓
+Unsupported files fail correctly.✓
+Tests pass.                      ✓
 ```
 
 ---
 
-# Phase 2 — Extraction Interface
+## Phase 2 — Extraction Interface
+
+**Status: COMPLETE**
 
 Goal:
 
@@ -445,17 +465,18 @@ Extractor
 ExtractionResult
 ```
 
-Tasks:
+Completed:
 
-* [ ] Create `ExtractionRequest`
-* [ ] Create `ExtractionResult`
-* [ ] Create `Extractor` interface
-* [ ] Create `FakeExtractor`
-* [ ] Integrate extractor with engine
-* [ ] Add extractor tests
-* [ ] Add engine integration tests
+* [x] Create `ExtractionRequest`
+* [x] Create `ExtractionResult`
+* [x] Create `DocumentExtractor` interface
+* [x] Create `FakeExtractor`
+* [x] Integrate extractor with engine
+* [x] Update JSON storage for extraction results
+* [x] Add extractor tests
+* [x] Add engine integration tests
 
-Acceptance criteria:
+Current acceptance criteria:
 
 ```text
 Document
@@ -471,11 +492,21 @@ ExtractionResult
 JSON
 ```
 
-No LLM yet.
+Status:
+
+```text
+10 tests passing
+```
+
+Important:
+
+**No LLM has been introduced yet.**
 
 ---
 
 # Phase 3 — First AI Extractor
+
+**Status: NEXT**
 
 Goal:
 
@@ -491,31 +522,74 @@ with:
 LLMExtractor
 ```
 
+Target:
+
+```text
+DocumentContent
+      +
+ExtractionRequest
+      ↓
+LLMExtractor
+      ↓
+structured ExtractionResult
+```
+
 Tasks:
 
-* [ ] Choose LLM provider
-* [ ] Add configuration
+* [ ] Decide LLM provider
+* [ ] Define LLM configuration
+* [ ] Add configuration management
 * [ ] Implement LLM client
-* [ ] Send document content + user request
-* [ ] Parse structured response
-* [ ] Handle invalid responses
-* [ ] Add tests with mocked LLM responses
+* [ ] Create `LLMExtractor`
+* [ ] Send document content + user request to the LLM
+* [ ] Request structured output
+* [ ] Parse LLM response
+* [ ] Handle invalid LLM responses
+* [ ] Handle LLM/API errors
+* [ ] Add mocked LLM tests
+* [ ] Replace `FakeExtractor` as the default engine extractor
+* [ ] Update engine integration tests
 
 Acceptance criteria:
 
 ```text
 invoice.pdf
+
 +
+
 "Give me invoice number and total"
+
         ↓
-LLMExtractor
+
+   LLMExtractor
+
         ↓
-structured JSON
+
+{
+  "invoice_number": "INV-123",
+  "total": 15000
+}
 ```
+
+Important constraints:
+
+* Keep the existing `DocumentExtractor` interface.
+* Do not rewrite `DocumentEngine`.
+* `FakeExtractor` should remain available for deterministic tests.
+* Do not add RAG.
+* Do not add vector databases.
+* Do not add agents.
+* Do not add queues.
+* Do not add databases.
+* Do not add unnecessary infrastructure.
+
+The LLM implementation should be replaceable.
 
 ---
 
 # Phase 4 — Structured Extraction
+
+**Status: PLANNED**
 
 Goal:
 
@@ -529,11 +603,14 @@ Tasks:
 * [ ] Validate LLM output
 * [ ] Handle missing fields
 * [ ] Handle invalid values
+* [ ] Define schema errors
+* [ ] Add validation tests
 
 Example:
 
 ```text
 Invoice
+
 ├── invoice_number
 ├── invoice_date
 ├── vendor_name
@@ -546,6 +623,8 @@ Invoice
 
 # Phase 5 — OCR
 
+**Status: PLANNED**
+
 Goal:
 
 Support scanned/image-based documents.
@@ -556,6 +635,7 @@ Pipeline:
 PDF
  ↓
 Can text be extracted?
+
  ├── YES → normal extraction
  │
  └── NO
@@ -576,6 +656,8 @@ Tasks:
 ---
 
 # Phase 6 — Confidence & Validation
+
+**Status: PLANNED**
 
 Goal:
 
@@ -617,6 +699,8 @@ Example:
 
 # Phase 7 — Human Review
 
+**Status: PLANNED**
+
 Goal:
 
 Allow humans to correct uncertain extraction.
@@ -645,6 +729,8 @@ Tasks:
 
 # Phase 8 — API
 
+**Status: PLANNED**
+
 Only after the core engine is stable.
 
 ```text
@@ -666,6 +752,8 @@ Tasks:
 ---
 
 # Phase 9 — Async Processing
+
+**Status: PLANNED**
 
 Only when documents take long enough to require background processing.
 
@@ -698,9 +786,11 @@ Do not introduce these before they are needed.
 
 # Phase 10 — Production Infrastructure
 
+**Status: PLANNED**
+
 Only after the core product works.
 
-Potential components:
+Potential architecture:
 
 ```text
                     API
@@ -711,12 +801,12 @@ Potential components:
                      ▼
                    Worker
                      │
-          ┌──────────┼──────────┐
-          ▼          ▼          ▼
-         S3       Database      AI
+           ┌─────────┼─────────┐
+           ▼         ▼         ▼
+          S3      Database     AI
                      │
                      ▼
-               Observability
+                Observability
 ```
 
 Potential technologies:
@@ -733,9 +823,9 @@ Loki
 
 ---
 
-# 8. First Target
+# 8. Current Immediate Target
 
-The immediate target is intentionally small:
+The original first target was:
 
 ```text
 TXT/PDF
@@ -751,15 +841,25 @@ ExtractionResult
 JSON
 ```
 
-Once this works:
+This target is now **COMPLETE**.
+
+The next target is:
 
 ```text
-FakeExtractor
-      ↓
+TXT/PDF
+   ↓
+Reader
+   ↓
+DocumentContent
+   ↓
 LLMExtractor
+   ↓
+ExtractionResult
+   ↓
+JSON
 ```
 
-That becomes our first actual AI extraction system.
+The first AI milestone is therefore to replace `FakeExtractor` with `LLMExtractor` while keeping the existing architecture intact.
 
 ---
 
@@ -817,6 +917,14 @@ python
 pytest
 ```
 
+### Rule 9 — Keep `FakeExtractor`
+
+`FakeExtractor` should remain available for deterministic unit and integration tests even after `LLMExtractor` is introduced.
+
+### Rule 10 — Keep PLAN.md as the architecture source of truth
+
+Do not introduce major architectural changes without first updating this `PLAN.md`.
+
 ---
 
 # 10. Definition of "Core Engine Complete"
@@ -850,11 +958,27 @@ with tests covering:
 * storage
 * engine integration
 
+Current status:
+
+```text
+Core Reader:              COMPLETE
+Extraction Interface:     COMPLETE
+Fake Extraction:          COMPLETE
+LLM Extraction:           NOT STARTED
+Structured Validation:    NOT STARTED
+OCR:                      NOT STARTED
+Confidence:               NOT STARTED
+Human Review:             NOT STARTED
+API:                      NOT STARTED
+Async Processing:         NOT STARTED
+Production Infrastructure:NOT STARTED
+```
+
 ---
 
 # 11. Current Status
 
-**Current phase: Phase 1 — Core Reader**
+**Current phase: Phase 3 — First AI Extractor**
 
 Completed:
 
@@ -865,19 +989,36 @@ Completed:
 [x] JSON storage
 [x] Basic engine
 [x] Basic tests
+[x] Reader architecture refactored
+[x] Document domain model
+[x] DocumentContent domain model
+[x] Reader abstraction
+[x] Reader registry
+[x] ExtractionRequest
+[x] ExtractionResult
+[x] DocumentExtractor interface
+[x] FakeExtractor
+[x] Extractor engine integration
+[x] Extraction tests
+[x] Engine integration tests
 ```
 
 Current:
 
 ```text
-→ Refactor Reader architecture
-→ Introduce domain objects
+→ Implement LLMExtractor
 ```
 
 Next:
 
 ```text
-Phase 2 — Extraction Interface
+→ Structured extraction and validation
+```
+
+Current test status:
+
+```text
+10 tests passing
 ```
 
 ---
@@ -900,6 +1041,18 @@ ExtractionResult
 Storage
 ```
 
+The engine remains responsible for orchestration:
+
+```text
+DocumentEngine
+      │
+      ├── ReaderRegistry
+      │
+      ├── DocumentExtractor
+      │
+      └── JsonStorage
+```
+
 Do not deviate from this architecture without first updating this `PLAN.md`.
 
 When a major architectural decision changes, update this document.
@@ -911,29 +1064,29 @@ When a major architectural decision changes, update this document.
 The eventual system should become:
 
 ```text
-                     Document AI
-                         │
-            ┌────────────┴────────────┐
-            │                         │
-         Document                  User Request
-            │                         │
-            ▼                         ▼
-         Reader                   Extraction
-            │                         │
-            ▼                         ▼
-       DocumentContent ────────► AI Engine
-                                  │
-                          ┌───────┴────────┐
-                          │                │
-                     Validation        Confidence
-                          │                │
-                          └───────┬────────┘
-                                  ▼
-                              Result
-                                  │
-                    ┌─────────────┴─────────────┐
-                    ▼                           ▼
-                 Storage                   Human Review
+                       Document AI
+                           │
+             ┌─────────────┴─────────────┐
+             │                           │
+          Document                  User Request
+             │                           │
+             ▼                           ▼
+          Reader                    Extraction
+             │                           │
+             ▼                           ▼
+      DocumentContent ───────────► AI Engine
+                                       │
+                                ┌──────┴──────┐
+                                │             │
+                           Validation    Confidence
+                                │             │
+                                └──────┬──────┘
+                                       ▼
+                                     Result
+                                       │
+                         ┌─────────────┴─────────────┐
+                         ▼                           ▼
+                      Storage                  Human Review
 ```
 
 The system should eventually support:
