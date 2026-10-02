@@ -1,87 +1,250 @@
-# Document Reader AI (doc-keeper)
+# Doc-Keeper
 
-A small, developer-focused document reader and AI extraction engine.
+Doc-Keeper is a developer-focused document processing engine designed to read documents, understand extraction requests, extract structured information, validate results, and store the output.
 
-Read a document → understand what was requested → extract fields → validate → store the result.
-
-```text
-invoice.pdf + "invoice number, vendor name, total"
-  → { "invoice_number": "...", "vendor_name": "...", "total": ... }
-```
-
-> Documentation will expand as the project grows. See the [development plan](Document-Reader-AI--Development-plan.md) for architecture and phases.
-
----
-
-## Status
-
-**Early scaffolding** — core engine not implemented yet.
-
-| Area | Status |
-|------|--------|
-| Core extraction engine | Planned |
-| PDF / text readers | Planned |
-| AI extraction | Planned |
-| Validation | Planned |
-| API | Planned |
-| Production infra | Deferred |
-
----
-
-## Quick start
-
-*To be filled when install and run paths exist.*
-
-```bash
-# 1. Activate your pyenv environment (ask the maintainer for the env name)
-# pyenv activate <env>
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Run (command TBD)
-```
-
----
-
-## Project layout
+The core idea is:
 
 ```text
-doc-keeper/
-├── src/                 # Application source
-├── tests/               # Tests
-├── requirements.txt     # Python dependencies
-├── README.md            # This file
-├── user_guide.md        # How to use the product
-└── Document-Reader-AI--Development-plan.md
+Document
+   ↓
+Read
+   ↓
+Understand Request
+   ↓
+Extract
+   ↓
+Validate
+   ↓
+Store
 ```
 
----
+## Project Status
+
+Doc-Keeper is currently being developed incrementally.
+
+The core document-reading and extraction abstractions are in place. The next major milestone is integrating the first LLM-based extractor.
+
+```text
+Phase 1 — Core Reader
+        ✓
+
+Phase 2 — Extraction Interface
+        ✓
+
+Phase 3 — First AI Extractor
+        ← CURRENT
+
+Phase 4 — Structured Extraction
+        ○
+
+Phase 5 — OCR
+        ○
+
+Phase 6 — Confidence & Validation
+        ○
+
+Phase 7 — Human Review
+        ○
+
+Phase 8 — API
+        ○
+
+Phase 9 — Async Processing
+        ○
+
+Phase 10 — Production Infrastructure
+        ○
+```
 
 ## Documentation
 
-| Doc | Purpose |
-|-----|---------|
-| [user_guide.md](user_guide.md) | End-user / operator usage |
-| [Development plan](Document-Reader-AI--Development-plan.md) | Architecture, phases, component design |
+The project is documented in two primary files:
 
----
+* **[PLAN.md](PLAN.md)** — Development roadmap, phases, milestones, acceptance criteria, and current progress.
+* **[ARCHITECTURE.md](ARCHITECTURE.md)** — System architecture, components, responsibilities, data flow, interfaces, and architectural decisions.
 
-## Development principles
+Additional documentation:
 
-- Small, modular, testable
-- Local-first during development
-- Core extraction engine first; infrastructure later
-- Avoid premature microservices, queues, K8s, RAG, etc.
+* **[User Guide](user_guide.md)** — How to use Doc-Keeper.
+* **[Requirements](requirements.txt)** — Python dependencies.
 
----
+## Current Architecture
 
-## Contributing
+```text
+                    Document
+                       │
+                       ▼
+                ReaderRegistry
+                       │
+                       ▼
+                    Reader
+                       │
+                       ▼
+               DocumentContent
+                       │
+                       │
+              ExtractionRequest
+                       │
+                       ▼
+                   Extractor
+                       │
+                       ▼
+              ExtractionResult
+                       │
+                       ▼
+                   Storage
+                       │
+                       ▼
+                     JSON
+```
 
-*Guidelines to be added as the codebase matures.*
+The extraction layer is designed around an interface so different implementations can be introduced without rewriting the core engine.
 
----
+Current:
+
+```text
+DocumentContent
+      +
+ExtractionRequest
+      ↓
+FakeExtractor
+      ↓
+ExtractionResult
+```
+
+Next:
+
+```text
+DocumentContent
+      +
+ExtractionRequest
+      ↓
+LLMExtractor
+      ↓
+ExtractionResult
+```
+
+## Project Structure
+
+```text
+doc-keeper/
+│
+├── src/
+│   └── document_reader/
+│
+├── tests/
+│
+├── documents/
+│
+├── output/
+│
+├── README.md
+├── PLAN.md
+├── ARCHITECTURE.md
+├── user_guide.md
+├── requirements.txt
+└── .gitignore
+```
+
+## Development Philosophy
+
+Doc-Keeper is being built incrementally.
+
+The project intentionally avoids introducing infrastructure before it is required.
+
+For example, the initial implementation does not require:
+
+* Microservices
+* Kafka
+* Redis
+* Kubernetes
+* Vector databases
+* RAG
+* Agent frameworks
+* Cloud infrastructure
+
+The focus is first on building a clean, testable document-processing core.
+
+## Core Design Principles
+
+### Modular
+
+Each component has a focused responsibility.
+
+```text
+Reader      → reads documents
+Extractor   → extracts information
+Storage     → stores results
+Engine      → orchestrates the workflow
+```
+
+### Replaceable
+
+Important implementations should be replaceable without rewriting the core engine.
+
+```text
+Reader
+Extractor
+LLM Provider
+Storage
+OCR
+```
+
+### Testable
+
+The system should be testable without requiring external AI services.
+
+This is why `FakeExtractor` remains part of the architecture even after introducing an LLM extractor.
+
+### Local First
+
+The early stages focus on running and testing the core engine locally.
+
+Production infrastructure will be introduced only when the project actually requires it.
+
+## Example Target Usage
+
+Eventually, the core engine should support a workflow similar to:
+
+```python
+result = engine.process(
+    document="documents/invoice.pdf",
+    request="Give me invoice number, vendor and total"
+)
+```
+
+Producing structured information such as:
+
+```json
+{
+  "invoice_number": "INV-123",
+  "vendor": "ABC Pvt Ltd",
+  "total": 15000
+}
+```
+
+## Development
+
+Run the test suite with:
+
+```bash
+pytest
+```
+
+The exact development commands may evolve as the project grows.
+
+## Roadmap
+
+The complete development roadmap is maintained in:
+
+**[PLAN.md](PLAN.md)**
+
+The complete system architecture is maintained in:
+
+**[ARCHITECTURE.md](ARCHITECTURE.md)**
+
+These two files should be updated whenever major development or architectural decisions are made.
 
 ## License
 
-*TBD*
+See the repository for the current licensing information.
