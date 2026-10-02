@@ -1,6 +1,7 @@
 from document_reader.domain.content import DocumentContent
 from document_reader.domain.extraction import ExtractionRequest
 from document_reader.extractors.llm import LLMExtractor
+from typing import Any
 
 
 class FakeLLMClient:
@@ -8,7 +9,7 @@ class FakeLLMClient:
     def __init__(self):
         self.last_prompt = None
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str) -> dict[str, Any]:
         self.last_prompt = prompt
         return {
             "invoice_number": "INV-123",
@@ -33,6 +34,9 @@ def test_llm_extractor():
     )
 
     result = extractor.extract(content, request)
+
+    assert "Invoice INV-123 ABC Pvt Ltd Total 15000" in client.last_prompt
+    assert "Give me invoice number, vendor and total" in client.last_prompt
 
     assert result.data["invoice_number"] == "INV-123"
     assert result.data["vendor_name"] == "ABC Pvt Ltd"
