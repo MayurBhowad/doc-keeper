@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -7,4 +8,4 @@ class ExtractionRequest:
 
 @dataclass(frozen=True)
 class ExtractionResult:
-    data: dict
+    data: dict[str, Any]
