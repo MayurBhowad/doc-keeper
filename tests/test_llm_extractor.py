@@ -1,7 +1,11 @@
+from typing import Any
+
+import pytest
+
 from document_reader.domain.content import DocumentContent
 from document_reader.domain.extraction import ExtractionRequest
+from document_reader.domain.validation import ExtractionValidationError
 from document_reader.extractors.llm import LLMExtractor
-from typing import Any
 
 
 class FakeLLMClient:
@@ -76,3 +80,76 @@ def test_llm_extractor_with_schema():
     assert result.data["invoice_number"] == "INV-123"
     assert result.data["vendor_name"] == "ABC Pvt Ltd"
     assert result.data["total"] == 15000
+
+
+def test_llm_extractor_rejects_invalid_schema_result():
+    class InvalidFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> dict[str, Any]:
+            self.last_prompt = prompt
+            return {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": "15000",
+            }
+
+    client = InvalidFakeLLMClient()
+
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema={
+            "invoice_number": "string",
+            "vendor_name": "string",
+            "total": "number",
+        },
+    )
+
+    with pytest.raises(
+        ExtractionValidationError,
+        match="Field 'total' expected number but received string",
+    ):
+        extractor.extract(content, request)
+
+
+def test_llm_extractor_rejects_missing_schema_field():
+    class MissingFieldFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> dict[str, Any]:
+            self.last_prompt = prompt
+            return {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+            }
+
+    client = MissingFieldFakeLLMClient()
+
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema={
+            "invoice_number": "string",
+            "vendor_name": "string",
+            "total": "number",
+        },
+    )
+
+    with pytest.raises(
+        ExtractionValidationError,
+        match="Missing required field 'total'",
+    ):
+        extractor.extract(content, request)

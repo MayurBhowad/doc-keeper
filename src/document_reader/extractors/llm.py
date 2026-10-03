@@ -1,13 +1,19 @@
 from document_reader.domain.content import DocumentContent
 from document_reader.domain.extraction import ExtractionRequest, ExtractionResult
+from document_reader.domain.validator import ExtractionValidator
 from document_reader.extractors.base import DocumentExtractor
 from document_reader.llm.base import LLMClient
 
 
 class LLMExtractor(DocumentExtractor):
 
-    def __init__(self, client: LLMClient):
+    def __init__(
+        self,
+        client: LLMClient,
+        validator: ExtractionValidator | None = None,
+    ):
         self.client = client
+        self.validator = validator or ExtractionValidator()
 
     def extract(
         self,
@@ -17,6 +23,9 @@ class LLMExtractor(DocumentExtractor):
         prompt = self._build_prompt(content, request)
 
         response = self.client.generate(prompt)
+
+        if request.schema:
+            self.validator.validate(response, request.schema)
 
         return ExtractionResult(data=response)
 
