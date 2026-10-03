@@ -9,14 +9,33 @@ class LLMExtractor(DocumentExtractor):
     def __init__(self, client: LLMClient):
         self.client = client
 
-    def extract(self, content: DocumentContent, request: ExtractionRequest) -> ExtractionResult:
+    def extract(
+        self,
+        content: DocumentContent,
+        request: ExtractionRequest,
+    ) -> ExtractionResult:
         prompt = self._build_prompt(content, request)
 
         response = self.client.generate(prompt)
 
         return ExtractionResult(data=response)
 
-    def _build_prompt(self, content: DocumentContent, request: ExtractionRequest) -> str:
+    def _build_prompt(
+        self,
+        content: DocumentContent,
+        request: ExtractionRequest,
+    ) -> str:
+        schema_instruction = ""
+
+        if request.schema:
+            schema_instruction = f"""
+        Expected response schema:
+        {request.schema}
+
+        Return the extracted data using exactly the fields defined
+        in the schema.
+        """.strip()
+
         return f"""
         You are a document extraction assistant.
 
@@ -25,6 +44,8 @@ class LLMExtractor(DocumentExtractor):
 
         User request:
         {request.query}
+
+        {schema_instruction}
 
         Extract the requested information from the document.
         Return only the extracted result.
