@@ -41,3 +41,38 @@ def test_llm_extractor():
     assert result.data["invoice_number"] == "INV-123"
     assert result.data["vendor_name"] == "ABC Pvt Ltd"
     assert result.data["total"] == 15000
+    assert "Expected response schema:" not in client.last_prompt
+
+
+def test_llm_extractor_with_schema():
+    client = FakeLLMClient()
+
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema={
+            "invoice_number": "string",
+            "vendor_name": "string",
+            "total": "number",
+        },
+    )
+
+    result = extractor.extract(content, request)
+
+    assert "Extract invoice details" in client.last_prompt
+    assert "invoice_number" in client.last_prompt
+    assert "vendor_name" in client.last_prompt
+    assert "total" in client.last_prompt
+    assert "string" in client.last_prompt
+    assert "number" in client.last_prompt
+
+    assert result.data["invoice_number"] == "INV-123"
+    assert result.data["vendor_name"] == "ABC Pvt Ltd"
+    assert result.data["total"] == 15000
