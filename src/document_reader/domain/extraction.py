@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 from typing import Any
 
+from document_reader.domain.schema import ExtractionSchema
+
 
 @dataclass(frozen=True)
 class ExtractionRequest:
     query: str
-    schema: dict[str, str] | None = None
+    schema: type[ExtractionSchema] | None = None
 
 
 @dataclass(frozen=True)

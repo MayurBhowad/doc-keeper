@@ -7,6 +7,13 @@ from document_reader.domain.extraction import ExtractionRequest
 from document_reader.domain.validation import ExtractionValidationError
 from document_reader.extractors.llm import LLMExtractor
 
+from document_reader.domain.schema import ExtractionSchema
+
+class InvoiceExtraction(ExtractionSchema):
+    invoice_number: str
+    vendor_name: str
+    total: float
+
 
 class FakeLLMClient:
 
@@ -61,11 +68,7 @@ def test_llm_extractor_with_schema():
 
     request = ExtractionRequest(
         query="Extract invoice details",
-        schema={
-            "invoice_number": "string",
-            "vendor_name": "string",
-            "total": "number",
-        },
+        schema=InvoiceExtraction,
     )
 
     result = extractor.extract(content, request)
@@ -80,6 +83,9 @@ def test_llm_extractor_with_schema():
     assert result.data["invoice_number"] == "INV-123"
     assert result.data["vendor_name"] == "ABC Pvt Ltd"
     assert result.data["total"] == 15000
+
+    assert '"type": "string"' in client.last_prompt
+    assert '"type": "number"' in client.last_prompt
 
 
 def test_llm_extractor_rejects_invalid_schema_result():
@@ -105,16 +111,12 @@ def test_llm_extractor_rejects_invalid_schema_result():
 
     request = ExtractionRequest(
         query="Extract invoice details",
-        schema={
-            "invoice_number": "string",
-            "vendor_name": "string",
-            "total": "number",
-        },
+        schema=InvoiceExtraction,
     )
 
     with pytest.raises(
         ExtractionValidationError,
-        match="Field 'total' expected number but received string",
+        match="valid number",
     ):
         extractor.extract(content, request)
 
@@ -141,15 +143,11 @@ def test_llm_extractor_rejects_missing_schema_field():
 
     request = ExtractionRequest(
         query="Extract invoice details",
-        schema={
-            "invoice_number": "string",
-            "vendor_name": "string",
-            "total": "number",
-        },
+        schema=InvoiceExtraction,
     )
 
     with pytest.raises(
         ExtractionValidationError,
-        match="Missing required field 'total'",
+        match="Field required",
     ):
         extractor.extract(content, request)

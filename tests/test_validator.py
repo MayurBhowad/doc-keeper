@@ -1,26 +1,37 @@
 import pytest
 
+from document_reader.domain.schema import ExtractionSchema
 from document_reader.domain.validation import ExtractionValidationError
 from document_reader.domain.validator import ExtractionValidator
+
+
+class InvoiceExtraction(ExtractionSchema):
+    invoice_number: str
+    vendor_name: str
+    total: float
+
+
+class SimpleExtraction(ExtractionSchema):
+    total: float
 
 
 def test_validator_accepts_valid_data():
     validator = ExtractionValidator()
 
-    validator.validate(
+    result = validator.validate(
         {
             "invoice_number": "INV-123",
             "vendor_name": "ABC Pvt Ltd",
             "total": 15000,
-            "paid": True,
         },
-        {
-            "invoice_number": "string",
-            "vendor_name": "string",
-            "total": "number",
-            "paid": "boolean",
-        },
+        InvoiceExtraction,
     )
+
+    assert result == {
+        "invoice_number": "INV-123",
+        "vendor_name": "ABC Pvt Ltd",
+        "total": 15000,
+    }
 
 
 def test_validator_rejects_missing_field():
@@ -28,18 +39,14 @@ def test_validator_rejects_missing_field():
 
     with pytest.raises(
         ExtractionValidationError,
-        match="Missing required field 'total'",
+        match="Field required",
     ):
         validator.validate(
             {
                 "invoice_number": "INV-123",
                 "vendor_name": "ABC Pvt Ltd",
             },
-            {
-                "invoice_number": "string",
-                "vendor_name": "string",
-                "total": "number",
-            },
+            InvoiceExtraction,
         )
 
 
@@ -48,7 +55,7 @@ def test_validator_rejects_wrong_type():
 
     with pytest.raises(
         ExtractionValidationError,
-        match="Field 'total' expected number but received string",
+        match="valid number",
     ):
         validator.validate(
             {
@@ -56,11 +63,7 @@ def test_validator_rejects_wrong_type():
                 "vendor_name": "ABC Pvt Ltd",
                 "total": "15000",
             },
-            {
-                "invoice_number": "string",
-                "vendor_name": "string",
-                "total": "number",
-            },
+            InvoiceExtraction,
         )
 
 
@@ -69,22 +72,27 @@ def test_validator_rejects_boolean_as_number():
 
     with pytest.raises(
         ExtractionValidationError,
-        match="Field 'total' expected number but received boolean",
+        match="valid number",
     ):
         validator.validate(
             {"total": True},
-            {"total": "number"},
+            SimpleExtraction,
         )
 
 
-def test_validator_rejects_unsupported_type():
+def test_validator_rejects_unexpected_field():
     validator = ExtractionValidator()
 
     with pytest.raises(
         ExtractionValidationError,
-        match="Unsupported schema type 'date'",
+        match="Extra inputs are not permitted",
     ):
         validator.validate(
-            {"invoice_date": "2026-10-03"},
-            {"invoice_date": "date"},
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000,
+                "unexpected": "value",
+            },
+            InvoiceExtraction,
         )
