@@ -4,7 +4,10 @@ import pytest
 
 from document_reader.domain.content import DocumentContent
 from document_reader.domain.extraction import ExtractionRequest
-from document_reader.domain.validation import ExtractionValidationError
+from document_reader.domain.validation import (
+    ExtractionParsingError,
+    ExtractionValidationError,
+)
 from document_reader.extractors.llm import LLMExtractor
 
 from document_reader.domain.schema import ExtractionSchema
@@ -20,13 +23,15 @@ class FakeLLMClient:
     def __init__(self):
         self.last_prompt = None
 
-    def generate(self, prompt: str) -> dict[str, Any]:
+    def generate(self, prompt: str) -> str:
         self.last_prompt = prompt
-        return {
-            "invoice_number": "INV-123",
-            "vendor_name": "ABC Pvt Ltd",
-            "total": 15000,
-        }
+        return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
 
     
 def test_llm_extractor():
@@ -91,13 +96,15 @@ def test_llm_extractor_with_schema():
 def test_llm_extractor_rejects_invalid_schema_result():
     class InvalidFakeLLMClient(FakeLLMClient):
 
-        def generate(self, prompt: str) -> dict[str, Any]:
+        def generate(self, prompt: str) -> str:
             self.last_prompt = prompt
-            return {
-                "invoice_number": "INV-123",
-                "vendor_name": "ABC Pvt Ltd",
-                "total": "15000",
-            }
+            return """
+                {
+                    "invoice_number": "INV-123",
+                    "vendor_name": "ABC Pvt Ltd",
+                    "total": "15000"
+                }
+                """
 
     client = InvalidFakeLLMClient()
 
@@ -124,12 +131,15 @@ def test_llm_extractor_rejects_invalid_schema_result():
 def test_llm_extractor_rejects_missing_schema_field():
     class MissingFieldFakeLLMClient(FakeLLMClient):
 
-        def generate(self, prompt: str) -> dict[str, Any]:
+        def generate(self, prompt: str) -> str:
             self.last_prompt = prompt
-            return {
+
+            return """
+            {
                 "invoice_number": "INV-123",
-                "vendor_name": "ABC Pvt Ltd",
+                "vendor_name": "ABC Pvt Ltd"
             }
+            """
 
     client = MissingFieldFakeLLMClient()
 
@@ -151,3 +161,173 @@ def test_llm_extractor_rejects_missing_schema_field():
         match="Field required",
     ):
         extractor.extract(content, request)
+
+
+def test_llm_extractor_parses_json_code_fence():
+    class CodeFenceFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> str:
+            self.last_prompt = prompt
+
+            return """
+            ```json
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            ```
+            """
+
+    client = CodeFenceFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data["invoice_number"] == "INV-123"
+    assert result.data["vendor_name"] == "ABC Pvt Ltd"
+    assert result.data["total"] == 15000
+
+
+def test_llm_extractor_parses_plain_code_fence():
+    class CodeFenceFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> str:
+            self.last_prompt = prompt
+
+            return """
+            ```
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            ```
+            """
+
+    client = CodeFenceFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data["invoice_number"] == "INV-123"
+    assert result.data["vendor_name"] == "ABC Pvt Ltd"
+    assert result.data["total"] == 15000
+
+
+def test_llm_extractor_rejects_invalid_json_in_code_fence():
+    class InvalidCodeFenceFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> str:
+            self.last_prompt = prompt
+
+            return """
+            ```json
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000,
+            }
+            ```
+            """
+
+    client = InvalidCodeFenceFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    with pytest.raises(
+        ExtractionParsingError,
+        match="LLM response is not valid JSON",
+    ):
+        extractor.extract(content, request)
+
+
+def test_llm_extractor_validates_code_fenced_response_with_schema():
+    class CodeFenceSchemaFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> str:
+            self.last_prompt = prompt
+
+            return """
+            ```json
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            ```
+            """
+
+    client = CodeFenceSchemaFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema=InvoiceExtraction,
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data == {
+        "invoice_number": "INV-123",
+        "vendor_name": "ABC Pvt Ltd",
+        "total": 15000,
+    }
+
+
+def test_llm_extractor_preserves_plain_json_response():
+    client = FakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data == {
+        "invoice_number": "INV-123",
+        "vendor_name": "ABC Pvt Ltd",
+        "total": 15000,
+    }
