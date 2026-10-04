@@ -45,21 +45,23 @@ def test_openai_client():
     client.client = fake_openai
     client.model = "test-model"
 
-    result = client.generate("Extract invoce number")
+    result = client.generate("Extract invoice number")
 
-    assert result == {
-            "invoice_number": "INV-123",
-            "vendor_name": "ABC Pvt Ltd",
-            "total": 15000,
-        }
+    assert result == """
+                    {
+                        "invoice_number": "INV-123",
+                        "vendor_name": "ABC Pvt Ltd",
+                        "total": 15000
+                    }
+                """
 
     assert fake_openai.responses.last_kwargs == {
         "model": "test-model",
-        "input": "Extract invoce number",
+        "input": "Extract invoice number",
     }
 
 
-def test_openai_client_rejects_invalid_json():
+def test_openai_client_returns_invalid_json_as_raw_text():
     class InvalidJSONResponse:
         output_text = "this is not valid json"
 
@@ -68,17 +70,14 @@ def test_openai_client_rejects_invalid_json():
             @staticmethod
             def create(**kwargs):
                 return InvalidJSONResponse()
-    
+
     client = OpenAIClient.__new__(OpenAIClient)
     client.client = InvalidJSONOpenAI()
     client.model = "test-model"
 
-    try:
-        client.generate("Extract invoice number")
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("Expected ValueError for invalid JSON")
+    result = client.generate("Extract invoice number")
+
+    assert result == "this is not valid json"
 
 
 def test_openai_client_propagates_api_error():

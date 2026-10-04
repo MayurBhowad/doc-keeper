@@ -1,6 +1,9 @@
 import json
+from typing import Any
+
 from document_reader.domain.content import DocumentContent
 from document_reader.domain.extraction import ExtractionRequest, ExtractionResult
+from document_reader.domain.validation import ExtractionParsingError
 from document_reader.domain.validator import ExtractionValidator
 from document_reader.extractors.base import DocumentExtractor
 from document_reader.llm.base import LLMClient
@@ -25,10 +28,12 @@ class LLMExtractor(DocumentExtractor):
 
         response = self.client.generate(prompt)
 
-        if request.schema:
-            response = self.validator.validate(response, request.schema)
+        data = self._parse_response(response)
 
-        return ExtractionResult(data=response)
+        if request.schema:
+            data = self.validator.validate(data, request.schema)
+
+        return ExtractionResult(data=data)
 
     def _build_prompt(
         self,
@@ -63,3 +68,21 @@ class LLMExtractor(DocumentExtractor):
         Extract the requested information from the document.
         Return only the extracted result.
         """.strip()
+
+    def _parse_response(
+        self,
+        response: str,
+    ) -> dict[str, Any]:
+        try:
+            data = json.loads(response)
+        except json.JSONDecodeError as exc:
+            raise ExtractionParsingError(
+                "LLM response is not valid JSON."
+            ) from exc
+
+        if not isinstance(data, dict):
+            raise ExtractionParsingError(
+                "LLM response must be a JSON object."
+            )
+
+        return data

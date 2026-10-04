@@ -9,11 +9,13 @@ from document_reader.extractors.fake import FakeExtractor
 class FakeLLMClient:
 
     def generate(self, prompt: str) -> str:
-        return {
-            "invoice_number": "INV-123",
-            "vendor_name": "ABC Pvt Ltd",
-            "total": 15000,
-        }
+        return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
 
 def test_engine_processes_text_document(tmp_path):
     input_file = tmp_path / "hello.txt"

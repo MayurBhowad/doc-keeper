@@ -20,13 +20,15 @@ class FakeLLMClient:
     def __init__(self):
         self.last_prompt = None
 
-    def generate(self, prompt: str) -> dict[str, Any]:
+    def generate(self, prompt: str) -> str:
         self.last_prompt = prompt
-        return {
-            "invoice_number": "INV-123",
-            "vendor_name": "ABC Pvt Ltd",
-            "total": 15000,
-        }
+        return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
 
     
 def test_llm_extractor():
@@ -91,13 +93,15 @@ def test_llm_extractor_with_schema():
 def test_llm_extractor_rejects_invalid_schema_result():
     class InvalidFakeLLMClient(FakeLLMClient):
 
-        def generate(self, prompt: str) -> dict[str, Any]:
+        def generate(self, prompt: str) -> str:
             self.last_prompt = prompt
-            return {
-                "invoice_number": "INV-123",
-                "vendor_name": "ABC Pvt Ltd",
-                "total": "15000",
-            }
+            return """
+                {
+                    "invoice_number": "INV-123",
+                    "vendor_name": "ABC Pvt Ltd",
+                    "total": "15000"
+                }
+                """
 
     client = InvalidFakeLLMClient()
 
@@ -124,12 +128,15 @@ def test_llm_extractor_rejects_invalid_schema_result():
 def test_llm_extractor_rejects_missing_schema_field():
     class MissingFieldFakeLLMClient(FakeLLMClient):
 
-        def generate(self, prompt: str) -> dict[str, Any]:
+        def generate(self, prompt: str) -> str:
             self.last_prompt = prompt
-            return {
+
+            return """
+            {
                 "invoice_number": "INV-123",
-                "vendor_name": "ABC Pvt Ltd",
+                "vendor_name": "ABC Pvt Ltd"
             }
+            """
 
     client = MissingFieldFakeLLMClient()
 
