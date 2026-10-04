@@ -1,4 +1,10 @@
 from document_reader.domain.extraction import ExtractionRequest, ExtractionResult
+from document_reader.domain.schema import ExtractionSchema
+
+class InvoiceExtraction(ExtractionSchema):
+    invoice_number: str
+    vendor_name: str
+    total: float
 
 
 def test_extraction_request():
@@ -17,14 +23,8 @@ def test_extraction_result():
 def test_extraction_request_with_schema():
     request = ExtractionRequest(
         query="Extract invoice details",
-        schema={
-            "invoice_number": "string",
-            "vendor_name": "string",
-            "total": "number",
-        },
+        schema=InvoiceExtraction,
     )
 
     assert request.query == "Extract invoice details"
-    assert request.schema["invoice_number"] == "string"
-    assert request.schema["vendor_name"] == "string"
-    assert request.schema["total"] == "number"
+    assert request.schema is InvoiceExtraction
