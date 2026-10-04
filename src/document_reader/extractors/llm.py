@@ -73,6 +73,13 @@ class LLMExtractor(DocumentExtractor):
         self,
         response: str,
     ) -> dict[str, Any]:
+        response = response.strip()
+
+        if response.startswith("```json") and response.endswith("```"):
+            response = response[7:-3].strip()
+        elif response.startswith("```") and response.endswith("```"):
+            response = response[3:-3].strip()
+
         try:
             data = json.loads(response)
         except json.JSONDecodeError as exc:
