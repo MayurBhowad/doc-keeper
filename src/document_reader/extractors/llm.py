@@ -3,7 +3,10 @@ from typing import Any
 
 from document_reader.domain.content import DocumentContent
 from document_reader.domain.extraction import ExtractionRequest, ExtractionResult
-from document_reader.domain.validation import ExtractionParsingError
+from document_reader.domain.validation import (
+    ExtractionParsingError,
+    ExtractionValidationError,
+)
 from document_reader.domain.validator import ExtractionValidator
 from document_reader.extractors.base import DocumentExtractor
 from document_reader.llm.base import LLMClient
@@ -15,9 +18,14 @@ class LLMExtractor(DocumentExtractor):
         self,
         client: LLMClient,
         validator: ExtractionValidator | None = None,
+        max_attempts: int = 2,
     ):
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be at least 1")
+
         self.client = client
         self.validator = validator or ExtractionValidator()
+        self.max_attempts = max_attempts
 
     def extract(
         self,
@@ -26,14 +34,37 @@ class LLMExtractor(DocumentExtractor):
     ) -> ExtractionResult:
         prompt = self._build_prompt(content, request)
 
-        response = self.client.generate(prompt)
+        last_error = None
+        current_prompt = prompt
 
-        data = self._parse_response(response)
+        for attempt in range(self.max_attempts):
+            response = self.client.generate(current_prompt)
 
-        if request.schema:
-            data = self.validator.validate(data, request.schema)
+            try:
+                data = self._parse_response(response)
 
-        return ExtractionResult(data=data)
+                if request.schema:
+                    data = self.validator.validate(data, request.schema)
+
+                return ExtractionResult(data=data)
+
+            except (ExtractionParsingError, ExtractionValidationError) as exc:
+                last_error = exc
+
+                if attempt < self.max_attempts - 1:
+                    current_prompt = (
+                        f"{prompt}\n\n"
+                        "Previous response failed extraction validation.\n\n"
+                        f"Error:\n{exc}\n\n"
+                        "Please correct the response and return only the extracted result."
+                    )
+
+        if last_error:
+            raise last_error
+
+        raise ExtractionParsingError(
+            "LLM extraction failed after maximum attempts."
+        )
 
     def _build_prompt(
         self,
