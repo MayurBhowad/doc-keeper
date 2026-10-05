@@ -128,6 +128,312 @@ def test_llm_extractor_rejects_invalid_schema_result():
         extractor.extract(content, request)
 
 
+def test_llm_extractor_retries_after_validation_failure():
+    class RetryFakeLLMClient:
+        def __init__(self):
+            self.call_count = 0
+            self.prompts = []
+
+        def generate(self, prompt: str) -> str:
+            self.call_count += 1
+            self.prompts.append(prompt)
+
+            if self.call_count == 1:
+                return """
+                {
+                    "invoice_number": "INV-123",
+                    "vendor_name": "ABC Pvt Ltd",
+                    "total": "invalid"
+                }
+                """
+
+            return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
+
+    client = RetryFakeLLMClient()
+    extractor = LLMExtractor(client, max_attempts=2)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema=InvoiceExtraction,
+    )
+
+    result = extractor.extract(content, request)
+
+    assert client.call_count == 2
+    assert result.data["invoice_number"] == "INV-123"
+    assert result.data["vendor_name"] == "ABC Pvt Ltd"
+    assert result.data["total"] == 15000
+
+
+def test_llm_extractor_retries_after_parsing_failure():
+    class RetryFakeLLMClient:
+        def __init__(self):
+            self.call_count = 0
+
+        def generate(self, prompt: str) -> str:
+            self.call_count += 1
+
+            if self.call_count == 1:
+                return "This is not valid JSON."
+
+            return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
+
+    client = RetryFakeLLMClient()
+    extractor = LLMExtractor(client, max_attempts=2)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema=InvoiceExtraction,
+    )
+
+    result = extractor.extract(content, request)
+
+    assert client.call_count == 2
+    assert result.data["invoice_number"] == "INV-123"
+    assert result.data["vendor_name"] == "ABC Pvt Ltd"
+    assert result.data["total"] == 15000
+
+
+def test_llm_extractor_respects_max_attempts():
+    class AlwaysFailingLLMClient:
+        def __init__(self):
+            self.call_count = 0
+
+        def generate(self, prompt: str) -> str:
+            self.call_count += 1
+            return "This is not valid JSON."
+
+    client = AlwaysFailingLLMClient()
+    extractor = LLMExtractor(client, max_attempts=3)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema=InvoiceExtraction,
+    )
+
+    with pytest.raises(ExtractionParsingError):
+        extractor.extract(content, request)
+
+    assert client.call_count == 3
+
+
+def test_llm_extractor_preserves_final_validation_error():
+    class AlwaysInvalidLLMClient:
+        def __init__(self):
+            self.call_count = 0
+
+        def generate(self, prompt: str) -> str:
+            self.call_count += 1
+
+            return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": "invalid"
+            }
+            """
+
+    client = AlwaysInvalidLLMClient()
+    extractor = LLMExtractor(client, max_attempts=2)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema=InvoiceExtraction,
+    )
+
+    with pytest.raises(
+        ExtractionValidationError,
+        match="valid number",
+    ):
+        extractor.extract(content, request)
+
+    assert client.call_count == 2
+
+
+def test_llm_extractor_preserves_final_parsing_error():
+    class AlwaysInvalidJSONClient:
+        def __init__(self):
+            self.call_count = 0
+
+        def generate(self, prompt: str) -> str:
+            self.call_count += 1
+            return "This is not valid JSON."
+
+    client = AlwaysInvalidJSONClient()
+    extractor = LLMExtractor(client, max_attempts=2)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema=InvoiceExtraction,
+    )
+
+    with pytest.raises(
+        ExtractionParsingError,
+        match="does not contain a JSON object",
+    ):
+        extractor.extract(content, request)
+
+    assert client.call_count == 2
+
+
+def test_llm_extractor_includes_failure_in_retry_prompt():
+    class RetryFakeLLMClient:
+        def __init__(self):
+            self.call_count = 0
+            self.prompts = []
+
+        def generate(self, prompt: str) -> str:
+            self.call_count += 1
+            self.prompts.append(prompt)
+
+            if self.call_count == 1:
+                return """
+                {
+                    "invoice_number": "INV-123",
+                    "vendor_name": "ABC Pvt Ltd",
+                    "total": "invalid"
+                }
+                """
+
+            return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
+
+    client = RetryFakeLLMClient()
+    extractor = LLMExtractor(client, max_attempts=2)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema=InvoiceExtraction,
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data["total"] == 15000
+    assert client.call_count == 2
+
+    retry_prompt = client.prompts[1]
+
+    assert "previous response" in retry_prompt.lower()
+    assert "valid number" in retry_prompt.lower()
+
+
+def test_llm_extractor_preserves_schema_in_retry_prompt():
+    class RetryFakeLLMClient:
+        def __init__(self):
+            self.call_count = 0
+            self.prompts = []
+
+        def generate(self, prompt: str) -> str:
+            self.call_count += 1
+            self.prompts.append(prompt)
+
+            if self.call_count == 1:
+                return """
+                {
+                    "invoice_number": "INV-123",
+                    "vendor_name": "ABC Pvt Ltd",
+                    "total": "invalid"
+                }
+                """
+
+            return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
+
+    client = RetryFakeLLMClient()
+    extractor = LLMExtractor(client, max_attempts=2)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+        schema=InvoiceExtraction,
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data["total"] == 15000
+    assert client.call_count == 2
+
+    retry_prompt = client.prompts[1]
+
+    assert "Expected response schema:" in retry_prompt
+    assert "invoice_number" in retry_prompt
+    assert "vendor_name" in retry_prompt
+    assert "total" in retry_prompt
+
+
+def test_llm_extractor_rejects_invalid_max_attempts():
+    client = FakeLLMClient()
+
+    with pytest.raises(
+        ValueError,
+        match="max_attempts must be at least 1",
+    ):
+        LLMExtractor(client, max_attempts=0)
+
+
 def test_llm_extractor_rejects_missing_schema_field():
     class MissingFieldFakeLLMClient(FakeLLMClient):
 
