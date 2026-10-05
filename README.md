@@ -22,7 +22,7 @@ Store
 
 Doc-Keeper is currently being developed incrementally.
 
-The core document-reading and extraction abstractions are in place. The next major milestone is integrating the first LLM-based extractor.
+Text and PDF reading, the extraction interface, an OpenAI-backed extractor, and optional schema validation are in place. `DocumentEngine` still uses `FakeExtractor` unless an `LLMExtractor` is supplied. There is no CLI or HTTP API yet.
 
 ```text
 Phase 1 — Core Reader
@@ -32,10 +32,10 @@ Phase 2 — Extraction Interface
         ✓
 
 Phase 3 — First AI Extractor
-        ← CURRENT
+        ✓
 
 Phase 4 — Structured Extraction
-        ○
+        partial (schema validation on LLMExtractor)
 
 Phase 5 — OCR
         ○
@@ -55,6 +55,8 @@ Phase 9 — Async Processing
 Phase 10 — Production Infrastructure
         ○
 ```
+
+Phase 3 is usable by passing `LLMExtractor` into the engine. Phase 4 covers optional Pydantic schemas on `ExtractionRequest`. `DocumentEngine.process` accepts a query string and does not pass a schema.
 
 ## Documentation
 
@@ -98,9 +100,9 @@ Additional documentation:
                      JSON
 ```
 
-The extraction layer is designed around an interface so different implementations can be introduced without rewriting the core engine.
+The extraction layer is an interface, so implementations can be swapped without rewriting the engine.
 
-Current:
+Default engine path:
 
 ```text
 DocumentContent
@@ -112,7 +114,7 @@ FakeExtractor
 ExtractionResult
 ```
 
-Next:
+Optional AI path:
 
 ```text
 DocumentContent
@@ -123,6 +125,8 @@ LLMExtractor
       ↓
 ExtractionResult
 ```
+
+When the request includes a schema, `LLMExtractor` asks the model for those fields and validates the parsed JSON before returning it.
 
 ## Project Structure
 
@@ -194,7 +198,7 @@ OCR
 
 The system should be testable without requiring external AI services.
 
-This is why `FakeExtractor` remains part of the architecture even after introducing an LLM extractor.
+This is why `FakeExtractor` remains the engine default and stays available after the LLM extractor.
 
 ### Local First
 
@@ -202,36 +206,33 @@ The early stages focus on running and testing the core engine locally.
 
 Production infrastructure will be introduced only when the project actually requires it.
 
-## Example Target Usage
+## Current Usage
 
-Eventually, the core engine should support a workflow similar to:
+With the package installed, the engine reads a `.txt` or `.pdf` file, runs the default extractor, and writes JSON under `output/`:
 
 ```python
+from document_reader.engine import DocumentEngine
+
+engine = DocumentEngine()
 result = engine.process(
-    document="documents/invoice.pdf",
-    request="Give me invoice number, vendor and total"
+    "documents/invoice.txt",
+    "Give me invoice number, vendor and total",
 )
 ```
 
-Producing structured information such as:
+`FakeExtractor` returns the query, filename, and document text. It does not call a model.
 
-```json
-{
-  "invoice_number": "INV-123",
-  "vendor": "ABC Pvt Ltd",
-  "total": 15000
-}
-```
+To extract with OpenAI, pass `LLMExtractor` explicitly. Set `OPENAI_API_KEY` in the environment. See the [User Guide](user_guide.md).
 
 ## Development
 
-Run the test suite with:
+Python 3.12 or newer is required.
 
 ```bash
+pip install -r requirements.txt
+pip install -e .
 pytest
 ```
-
-The exact development commands may evolve as the project grows.
 
 ## Roadmap
 
