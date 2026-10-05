@@ -80,8 +80,17 @@ class LLMExtractor(DocumentExtractor):
         elif response.startswith("```") and response.endswith("```"):
             response = response[3:-3].strip()
 
+        decoder = json.JSONDecoder()
+
         try:
-            data = json.loads(response)
+            start = response.find("{")
+
+            if start == -1:
+                raise ExtractionParsingError(
+                    "LLM response does not contain a JSON object."
+                )
+
+            data, _ = decoder.raw_decode(response[start:])
         except json.JSONDecodeError as exc:
             raise ExtractionParsingError(
                 "LLM response is not valid JSON."

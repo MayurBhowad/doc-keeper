@@ -331,3 +331,197 @@ def test_llm_extractor_preserves_plain_json_response():
         "vendor_name": "ABC Pvt Ltd",
         "total": 15000,
     }
+
+def test_llm_extractor_parses_json_with_surrounding_text():
+    class SurroundingTextFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> str:
+            self.last_prompt = prompt
+
+            return """
+            Here is the extracted invoice information:
+
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+
+            I hope this helps.
+            """
+
+    client = SurroundingTextFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data == {
+        "invoice_number": "INV-123",
+        "vendor_name": "ABC Pvt Ltd",
+        "total": 15000,
+    }
+
+def test_llm_extractor_parses_nested_json_with_surrounding_text():
+    class NestedJSONFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> str:
+            self.last_prompt = prompt
+
+            return """
+            Here is the extracted invoice information:
+
+            {
+                "invoice_number": "INV-123",
+                "vendor": {
+                    "name": "ABC Pvt Ltd",
+                    "address": {
+                        "city": "Mumbai"
+                    }
+                },
+                "total": 15000
+            }
+
+            I hope this helps.
+            """
+
+    client = NestedJSONFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data["invoice_number"] == "INV-123"
+    assert result.data["vendor"]["name"] == "ABC Pvt Ltd"
+    assert result.data["vendor"]["address"]["city"] == "Mumbai"
+    assert result.data["total"] == 15000
+
+
+
+def test_llm_extractor_parses_code_fenced_json_with_surrounding_text():
+    class CodeFenceSurroundingTextFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> str:
+            self.last_prompt = prompt
+
+            return """
+            Here is the extracted invoice information:
+
+            ```json
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            ```
+
+            I hope this helps.
+            """
+
+    client = CodeFenceSurroundingTextFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data == {
+        "invoice_number": "INV-123",
+        "vendor_name": "ABC Pvt Ltd",
+        "total": 15000,
+    }
+
+
+def test_llm_extractor_rejects_surrounding_text_without_json():
+    class InvalidSurroundingTextFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> str:
+            self.last_prompt = prompt
+
+            return """
+            Here is the extracted invoice information.
+
+            Unfortunately, no structured result is available.
+            """
+
+    client = InvalidSurroundingTextFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    with pytest.raises(
+        ExtractionParsingError,
+        match="does not contain a JSON object",
+    ):
+        extractor.extract(content, request)
+
+def test_llm_extractor_parses_json_with_text_after_it():
+    class TrailingTextFakeLLMClient(FakeLLMClient):
+
+        def generate(self, prompt: str) -> str:
+            self.last_prompt = prompt
+
+            return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+
+            This is additional explanatory information.
+            """
+
+    client = TrailingTextFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data == {
+        "invoice_number": "INV-123",
+        "vendor_name": "ABC Pvt Ltd",
+        "total": 15000,
+    }
