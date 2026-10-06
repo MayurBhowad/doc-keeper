@@ -46,7 +46,12 @@ class LLMExtractor(DocumentExtractor):
                 if request.schema:
                     data = self.validator.validate(data, request.schema)
 
-                return ExtractionResult(data=data)
+                return ExtractionResult(
+                    data=data,
+                    metadata={
+                        "attempts": attempt + 1,
+                    },
+                )
 
             except (ExtractionParsingError, ExtractionValidationError) as exc:
                 last_error = exc
