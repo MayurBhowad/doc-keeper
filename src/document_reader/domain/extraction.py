@@ -13,3 +13,4 @@ class ExtractionRequest:
 @dataclass(frozen=True)
 class ExtractionResult:
     data: dict[str, Any]
+    metadata: dict[str, Any] | None = None
