@@ -947,9 +947,8 @@ def test_llm_extractor_metadata_does_not_change_extracted_data():
         "total": 15000,
     }
 
-    assert result.metadata == {
-        "attempts": 1,
-    }
+    assert result.metadata["attempts"] == 1
+    assert result.metadata["duration_ms"] >= 0
 
 
 def test_llm_extractor_reports_metadata_without_schema():
@@ -969,3 +968,105 @@ def test_llm_extractor_reports_metadata_without_schema():
     result = extractor.extract(content, request)
 
     assert result.metadata["attempts"] == 1
+
+
+def test_llm_extractor_reports_duration():
+    client = FakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert "duration_ms" in result.metadata
+    assert result.metadata["duration_ms"] >= 0
+
+
+def test_llm_extractor_reports_duration_after_retry():
+    class RetryFakeLLMClient:
+        def __init__(self):
+            self.call_count = 0
+
+        def generate(self, prompt: str) -> str:
+            self.call_count += 1
+
+            if self.call_count == 1:
+                return "This is not valid JSON."
+
+            return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
+
+    client = RetryFakeLLMClient()
+    extractor = LLMExtractor(client, max_attempts=2)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.metadata["attempts"] == 2
+    assert result.metadata["duration_ms"] >= 0
+
+
+def test_llm_extractor_reports_complete_metadata():
+    client = FakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.data["invoice_number"] == "INV-123"
+    assert result.data["vendor_name"] == "ABC Pvt Ltd"
+    assert result.data["total"] == 15000
+
+    assert result.metadata["attempts"] == 1
+    assert result.metadata["duration_ms"] >= 0
+
+
+def test_llm_extractor_reports_duration_without_schema():
+    client = FakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.metadata["attempts"] == 1
+    assert result.metadata["duration_ms"] >= 0
