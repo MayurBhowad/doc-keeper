@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Any
 
 from document_reader.domain.content import DocumentContent
@@ -32,6 +33,7 @@ class LLMExtractor(DocumentExtractor):
         content: DocumentContent,
         request: ExtractionRequest,
     ) -> ExtractionResult:
+        start_time = time.perf_counter()
         prompt = self._build_prompt(content, request)
 
         last_error = None
@@ -46,10 +48,15 @@ class LLMExtractor(DocumentExtractor):
                 if request.schema:
                     data = self.validator.validate(data, request.schema)
 
+                duration_ms = int(
+                    (time.perf_counter() - start_time) * 1000
+                )
+
                 return ExtractionResult(
                     data=data,
                     metadata={
                         "attempts": attempt + 1,
+                        "duration_ms": duration_ms,
                     },
                 )
 
