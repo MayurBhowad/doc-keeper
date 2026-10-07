@@ -57,6 +57,7 @@ class LLMExtractor(DocumentExtractor):
                     metadata={
                         "attempts": attempt + 1,
                         "duration_ms": duration_ms,
+                        "model": self.client.model,
                     },
                 )
 

@@ -7,6 +7,7 @@ from document_reader.extractors.fake import FakeExtractor
 
 
 class FakeLLMClient:
+    model = "test-model"
 
     def generate(self, prompt: str) -> str:
         return """

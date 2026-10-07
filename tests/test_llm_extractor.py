@@ -19,6 +19,7 @@ class InvoiceExtraction(ExtractionSchema):
 
 
 class FakeLLMClient:
+    model = "test-model"
 
     def __init__(self):
         self.last_prompt = None
@@ -130,6 +131,7 @@ def test_llm_extractor_rejects_invalid_schema_result():
 
 def test_llm_extractor_retries_after_validation_failure():
     class RetryFakeLLMClient:
+        model = "test-model"
         def __init__(self):
             self.call_count = 0
             self.prompts = []
@@ -179,6 +181,7 @@ def test_llm_extractor_retries_after_validation_failure():
 
 def test_llm_extractor_retries_after_parsing_failure():
     class RetryFakeLLMClient:
+        model = "test-model"
         def __init__(self):
             self.call_count = 0
 
@@ -320,6 +323,7 @@ def test_llm_extractor_preserves_final_parsing_error():
 
 def test_llm_extractor_includes_failure_in_retry_prompt():
     class RetryFakeLLMClient:
+        model = "test-model"
         def __init__(self):
             self.call_count = 0
             self.prompts = []
@@ -372,6 +376,7 @@ def test_llm_extractor_includes_failure_in_retry_prompt():
 
 def test_llm_extractor_preserves_schema_in_retry_prompt():
     class RetryFakeLLMClient:
+        model = "test-model"
         def __init__(self):
             self.call_count = 0
             self.prompts = []
@@ -853,6 +858,8 @@ def test_llm_extractor_reports_attempt_count():
 
 def test_llm_extractor_reports_retry_attempt_count():
     class RetryFakeLLMClient:
+        model = "test-model"
+
         def __init__(self):
             self.call_count = 0
 
@@ -890,6 +897,8 @@ def test_llm_extractor_reports_retry_attempt_count():
 
 def test_llm_extractor_reports_multiple_retry_attempts():
     class RetryFakeLLMClient:
+        model = "test-model"
+
         def __init__(self):
             self.call_count = 0
 
@@ -992,6 +1001,8 @@ def test_llm_extractor_reports_duration():
 
 def test_llm_extractor_reports_duration_after_retry():
     class RetryFakeLLMClient:
+        model = "test-model"
+
         def __init__(self):
             self.call_count = 0
 
@@ -1070,3 +1081,106 @@ def test_llm_extractor_reports_duration_without_schema():
 
     assert result.metadata["attempts"] == 1
     assert result.metadata["duration_ms"] >= 0
+
+
+def test_llm_extractor_reports_model_metadata():
+    class ModelFakeLLMClient:
+        model = "test-model"
+
+        def generate(self, prompt: str) -> str:
+            return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
+
+    client = ModelFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.metadata["model"] == "test-model"
+
+
+def test_llm_extractor_reports_model_metadata_after_retry():
+    class RetryModelFakeLLMClient:
+        model = "test-model"
+
+        def __init__(self):
+            self.call_count = 0
+
+        def generate(self, prompt: str) -> str:
+            self.call_count += 1
+
+            if self.call_count == 1:
+                return "This is not valid JSON."
+
+            return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
+
+    client = RetryModelFakeLLMClient()
+    extractor = LLMExtractor(client, max_attempts=2)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.metadata["attempts"] == 2
+    assert result.metadata["model"] == "test-model"
+
+
+def test_llm_extractor_reports_model_metadata_without_schema():
+    class ModelFakeLLMClient:
+        model = "test-model"
+
+        def generate(self, prompt: str) -> str:
+            return """
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000
+            }
+            """
+
+    client = ModelFakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+    )
+
+    request = ExtractionRequest(
+        query="Extract invoice details",
+    )
+
+    result = extractor.extract(content, request)
+
+    assert result.metadata["attempts"] == 1
+    assert result.metadata["model"] == "test-model"
