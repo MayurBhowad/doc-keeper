@@ -68,6 +68,7 @@ The project is documented in two primary files:
 Additional documentation:
 
 * **[User Guide](user_guide.md)** — How to use Doc-Keeper.
+* **[Evaluation Guide](evaluation_guide.md)** — Evaluate extraction results against expected outputs.
 * **[Requirements](requirements.txt)** — Python dependencies.
 
 ## Current Architecture
