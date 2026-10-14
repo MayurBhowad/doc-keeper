@@ -1,6 +1,7 @@
 import fitz
 from document_reader import storage
 from document_reader.engine import DocumentEngine
+from document_reader.domain.extraction import ExtractionResult
 from document_reader.extractors.llm import LLMExtractor
 from document_reader.storage.json import JsonStorage
 from document_reader.extractors.fake import FakeExtractor
@@ -17,6 +18,7 @@ class FakeLLMClient:
                 "total": 15000
             }
             """
+
 
 def test_engine_processes_text_document(tmp_path):
     input_file = tmp_path / "hello.txt"
@@ -107,3 +109,40 @@ def test_engine_with_llm_extractor(tmp_path):
     assert result["data"]["total"] == 15000
 
     assert (output_dir / "invoice.json").exists()
+
+
+def test_engine_passes_schema_to_extractor(tmp_path):
+    from pydantic import Field
+
+    from document_reader.domain.schema import ExtractionSchema
+
+    class InvoiceSchema(ExtractionSchema):
+        invoice_number: str
+        total: int = Field(gt=0)
+
+    class SchemaCapturingExtractor:
+        def __init__(self):
+            self.request = None
+
+        def extract(self, content, request):
+            self.request = request
+            return ExtractionResult(
+                data={"invoice_number": "INV-123", "total": 15000}
+            )
+
+    input_file = tmp_path / "invoice.txt"
+    input_file.write_text("Invoice INV-123 Total 15000", encoding="utf-8")
+
+    extractor = SchemaCapturingExtractor()
+    engine = DocumentEngine(
+        extractor=extractor,
+        storage=JsonStorage(tmp_path / "output"),
+    )
+
+    engine.process(
+        str(input_file),
+        "Extract invoice details",
+        schema=InvoiceSchema,
+    )
+
+    assert extractor.request.schema is InvoiceSchema

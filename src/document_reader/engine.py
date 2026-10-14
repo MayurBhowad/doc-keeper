@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from document_reader.domain.extraction import ExtractionRequest
+from document_reader.domain.schema import ExtractionSchema
 from document_reader.extractors.fake import FakeExtractor
 
 from .domain.document import Document
@@ -24,7 +25,12 @@ class DocumentEngine:
             storage or JsonStorage()
         )
 
-    def process(self, path: str, query: str):
+    def process(
+        self,
+        path: str,
+        query: str,
+        schema: type[ExtractionSchema] | None = None,
+    ):
         document = Document(
             path=Path(path)
         )
@@ -35,7 +41,7 @@ class DocumentEngine:
 
         content = reader.read(document)
 
-        request = ExtractionRequest(query=query)
+        request = ExtractionRequest(query=query, schema=schema)
 
         result = self.extractor.extract(content, request)
 

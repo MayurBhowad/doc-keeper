@@ -532,34 +532,33 @@ The important architectural rule is that adding AI should **not require rewritin
 
 ---
 
-# 19. Future Validation Layer
+# 19. Structured Extraction and Schema Validation
 
-Validation will eventually sit between extraction and persistence.
+Structured extraction is supported through an optional Pydantic schema.
 
-```text
-LLMExtractor
-      ↓
-ExtractionResult
-      ↓
-Schema Validation
-      ↓
-Business Validation
-      ↓
-Storage
-```
-
-Example:
+`DocumentEngine.process()` accepts a schema and passes it through
+`ExtractionRequest` to the configured extractor. `LLMExtractor` uses the
+schema to guide the LLM response and validate the parsed data before
+returning an `ExtractionResult`.
 
 ```text
-Invoice
-├── invoice_number
-├── vendor_name
-├── subtotal
-├── tax
-└── total
+DocumentEngine.process(path, query, schema=InvoiceSchema)
+                         ↓
+                 ExtractionRequest
+                         ↓
+                    LLMExtractor
+                         ↓
+                Parse and validate
+                         ↓
+                 ExtractionResult
+                         ↓
+                      Storage
 ```
 
-Pydantic can be introduced when structured extraction becomes the next requirement.
+Schema validation is optional. Existing calls without a schema retain
+their previous behavior.
+
+Business validation and a separate validation layer remain future work.
 
 ---
 
