@@ -5,6 +5,12 @@ from document_reader.domain.extraction import ExtractionResult
 from document_reader.extractors.llm import LLMExtractor
 from document_reader.storage.json import JsonStorage
 from document_reader.extractors.fake import FakeExtractor
+import json
+
+import pytest
+
+from document_reader.domain.schema import ExtractionSchema
+from document_reader.domain.validation import ExtractionValidationError
 
 
 class FakeLLMClient:
@@ -146,3 +152,80 @@ def test_engine_passes_schema_to_extractor(tmp_path):
     )
 
     assert extractor.request.schema is InvoiceSchema
+
+
+def test_engine_extracts_and_validates_invoice_schema(tmp_path):
+    from pydantic import Field
+
+    class InvoiceSchema(ExtractionSchema):
+        invoice_number: str
+        vendor_name: str
+        total: int = Field(gt=0)
+
+    class SchemaAwareLLMClient:
+        model = "test-model"
+
+        def generate(self, prompt: str) -> str:
+            assert "Expected response schema:" in prompt
+            return json.dumps({
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000,
+            })
+
+    input_file = tmp_path / "invoice.txt"
+    input_file.write_text(
+        "Invoice INV-123 from ABC Pvt Ltd. Total 15000.",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "output"
+    engine = DocumentEngine(
+        extractor=LLMExtractor(SchemaAwareLLMClient()),
+        storage=JsonStorage(output_dir),
+    )
+
+    result = engine.process(
+        str(input_file),
+        "Extract invoice number, vendor, and total",
+        schema=InvoiceSchema,
+    )
+
+    assert result["data"] == {
+        "invoice_number": "INV-123",
+        "vendor_name": "ABC Pvt Ltd",
+        "total": 15000,
+    }
+
+    saved_data = json.loads(
+        (output_dir / "invoice.json").read_text(encoding="utf-8")
+    )
+    assert saved_data["data"] == result["data"]
+
+def test_engine_rejects_invalid_invoice_schema(tmp_path):
+    from pydantic import Field
+
+    class InvoiceSchema(ExtractionSchema):
+        invoice_number: str
+        total: int = Field(gt=0)
+
+    class InvalidLLMClient:
+        model = "test-model"
+
+        def generate(self, prompt: str) -> str:
+            return '{"invoice_number": "INV-123", "total": -10}'
+
+    input_file = tmp_path / "invoice.txt"
+    input_file.write_text("Invoice INV-123 Total -10", encoding="utf-8")
+
+    engine = DocumentEngine(
+        extractor=LLMExtractor(InvalidLLMClient(), max_attempts=1),
+        storage=JsonStorage(tmp_path / "output"),
+    )
+
+    with pytest.raises(ExtractionValidationError):
+        engine.process(
+            str(input_file),
+            "Extract invoice details",
+            schema=InvoiceSchema,
+        )

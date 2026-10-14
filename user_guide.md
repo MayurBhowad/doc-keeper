@@ -126,53 +126,51 @@ The parsed value must be a JSON object.
 
 ---
 
-## Extraction requests
+## Structured extraction with schemas
 
-`DocumentEngine.process` takes two strings: a file path and a query. The query is sent to the extractor as written.
+Pass a Pydantic schema to `DocumentEngine.process()` to request structured extraction. The engine passes the schema to the extractor, and `LLMExtractor` validates the parsed response before returning it.
 
-For schema-checked extraction, call `LLMExtractor` directly. Subclass `ExtractionSchema` and pass that class on `ExtractionRequest`. Unknown fields are rejected, and values must match the declared types.
+Define a reusable invoice schema:
 
 ```python
-from pathlib import Path
+from pydantic import Field
 
-from document_reader.config.settings import Settings
-from document_reader.domain.document import Document
-from document_reader.domain.extraction import ExtractionRequest
 from document_reader.domain.schema import ExtractionSchema
-from document_reader.extractors.llm import LLMExtractor
-from document_reader.llm.openai import OpenAIClient
-from document_reader.readers.registry import ReaderRegistry
 
-class InvoiceExtraction(ExtractionSchema):
+
+class InvoiceSchema(ExtractionSchema):
     invoice_number: str
     vendor_name: str
-    total: float
-
-document = Document(path=Path("documents/invoice.txt"))
-reader = ReaderRegistry().get(document.extension)
-content = reader.read(document)
-
-extractor = LLMExtractor(OpenAIClient(Settings()))
-result = extractor.extract(
-    content,
-    ExtractionRequest(
-        query="Extract invoice details",
-        schema=InvoiceExtraction,
-    ),
-)
+    total: int = Field(gt=0)
 ```
 
-The model is shown the schema and asked to return only those fields. The extractor then validates the parsed object. `result.data` is a dictionary of the validated fields.
-
-This direct call does not write a JSON file. Use `JsonStorage` if you want the same file output as the engine:
+Use it with the engine:
 
 ```python
+from document_reader.config.settings import Settings
+from document_reader.engine import DocumentEngine
+from document_reader.extractors.llm import LLMExtractor
+from document_reader.llm.openai import OpenAIClient
 from document_reader.storage.json import JsonStorage
 
-output_path = JsonStorage("output").save(content.filename, result)
+engine = DocumentEngine(
+    extractor=LLMExtractor(OpenAIClient(Settings())),
+    storage=JsonStorage("output"),
+)
+
+result = engine.process(
+    "documents/invoice.txt",
+    "Extract invoice number, vendor name, and total",
+    schema=InvoiceSchema,
+)
+
+print(result["data"])
+print(result["output"])
 ```
 
----
+The returned `data` contains validated fields. The schema rejects unknown fields and enforces the declared types and constraints. Missing required fields and invalid values raise `ExtractionValidationError` after the configured extraction attempts are exhausted.
+
+Schema validation is optional. Existing calls that omit `schema` retain their previous behavior. The default `FakeExtractor` does not perform LLM-based structured extraction; supply `LLMExtractor` to use a language model.
 
 ## Understanding results
 

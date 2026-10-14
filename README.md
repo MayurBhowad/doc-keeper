@@ -35,7 +35,7 @@ Phase 3 — First AI Extractor
         ✓
 
 Phase 4 — Structured Extraction
-        partial (schema validation on LLMExtractor)
+        ✓
 
 Phase 5 — OCR
         ○
@@ -56,7 +56,7 @@ Phase 10 — Production Infrastructure
         ○
 ```
 
-Phase 3 is usable by passing `LLMExtractor` into the engine. Phase 4 covers optional Pydantic schemas on `ExtractionRequest`. `DocumentEngine.process` accepts a query string and does not pass a schema.
+Phase 3 is usable by passing `LLMExtractor` into the engine. Phase 4 supports optional Pydantic schemas through `DocumentEngine.process(path, query, schema=InvoiceSchema)`. The schema guides extraction and validates the parsed result before storage.
 
 ## Documentation
 
