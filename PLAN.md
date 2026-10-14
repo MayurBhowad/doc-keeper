@@ -247,7 +247,7 @@ The LLM implementation must remain replaceable.
 
 # 6. Phase 4 — Structured Extraction
 
-**Status: IN PROGRESS**
+**Status: DONE**
 
 Goal:
 
@@ -257,13 +257,14 @@ Tasks:
 
 * [x] Introduce extraction schemas
 * [x] Add Pydantic validation
-* [ ] Create a reusable InvoiceSchema example
+* [x] Create a reusable InvoiceSchema example
 * [x] Validate LLM output
 * [x] Handle missing fields
 * [x] Handle invalid values
 * [x] Define schema errors
 * [x] Add validation tests
 * [x] Expose optional schemas through DocumentEngine
+* [x] Add end-to-end engine schema validation tests
 
 Example:
 
@@ -499,10 +500,10 @@ Phase 3 — First AI Extractor
         ✓
 
 Phase 4 — Structured Extraction
-        ← CURRENT
+        ✓
 
 Phase 5 — OCR
-        ○
+        ← CURRENT
 
 Phase 6 — Confidence & Validation
         ○
