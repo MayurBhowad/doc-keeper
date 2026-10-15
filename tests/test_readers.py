@@ -215,9 +215,24 @@ def test_pdf_reader_does_not_call_ocr_for_blank_page(tmp_path):
 
 
 def test_tesseract_ocr_wraps_execution_failure():
+    import sys
+    from types import ModuleType, SimpleNamespace
     from unittest.mock import patch
 
-    import pytesseract
+    fake_pytesseract = ModuleType("pytesseract")
+
+    class FakeTesseractError(Exception):
+        pass
+
+    fake_pytesseract.TesseractError = FakeTesseractError
+    fake_pytesseract.image_to_string = lambda _image: (
+        _ for _ in ()
+    ).throw(FakeTesseractError("language data unavailable"))
+
+    fake_pil = ModuleType("PIL")
+    fake_pil.Image = SimpleNamespace(
+        frombytes=lambda *_args, **_kwargs: object()
+    )
 
     with (
         patch(
@@ -228,9 +243,9 @@ def test_tesseract_ocr_wraps_execution_failure():
             "document_reader.readers.ocr.shutil.which",
             return_value="/usr/bin/tesseract",
         ),
-        patch(
-            "pytesseract.image_to_string",
-            side_effect=pytesseract.TesseractError(1, "language data unavailable"),
+        patch.dict(
+            sys.modules,
+            {"pytesseract": fake_pytesseract, "PIL": fake_pil},
         ),
     ):
         with fitz.open() as pdf:
@@ -242,4 +257,4 @@ def test_tesseract_ocr_wraps_execution_failure():
             ) as error:
                 TesseractOCR()(page)
 
-    assert isinstance(error.value.__cause__, pytesseract.TesseractError)
+    assert isinstance(error.value.__cause__, FakeTesseractError)
