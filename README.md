@@ -38,7 +38,7 @@ Phase 4 — Structured Extraction
         ✓
 
 Phase 5 — OCR
-        ○
+        ✓
 
 Phase 6 — Confidence & Validation
         ○

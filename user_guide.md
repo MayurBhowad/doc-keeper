@@ -34,7 +34,27 @@ pip install -e .
 
 `pip install -e .` makes `document_reader` importable. The library lives under `src/`.
 
-PDF reading uses PyMuPDF and extracts embedded text. Scanned pages and images are not read.
+### Optional OCR setup
+
+OCR requires the Tesseract system executable and two Python packages.
+
+On Ubuntu:
+
+```bash
+sudo apt install tesseract-ocr
+```
+
+In the active project virtual environment:
+
+```bash
+pip install pytesseract Pillow
+```
+
+The default reader registry configures Tesseract OCR for PDFs. These dependencies are optional for ordinary PDFs with extractable embedded text; they are not required for every PDF, and are only needed when OCR is actually invoked.
+
+To configure a different text threshold, instantiate the reader with `PDFReader(ocr=TesseractOCR(), min_text_chars=20)`. This invokes OCR when a page contains fewer than 20 extractable text characters.
+
+PDF reading uses PyMuPDF to extract embedded text. When a page contains fewer than the configured minimum number of text characters, the reader can use Tesseract OCR as a fallback. The default threshold is `1`, so OCR is invoked when a page has no extractable text.
 
 ---
 
@@ -43,9 +63,9 @@ PDF reading uses PyMuPDF and extracts embedded text. Scanned pages and images ar
 | Type | Status |
 |------|--------|
 | Plain text (`.txt`, UTF-8) | Supported |
-| PDF (`.pdf`, embedded text) | Supported |
+| PDF (`.pdf`, embedded text and OCR fallback) | Supported |
 | DOCX | Unsupported (`ValueError`) |
-| Images / OCR | Not available |
+| Images / OCR | Standalone image files unsupported; OCR available for scanned PDF pages |
 
 Extensions are matched in lowercase. A missing file raises `FileNotFoundError`.
 
@@ -224,7 +244,7 @@ Keep API keys in the environment or a secret manager. Do not commit them.
 ## Troubleshooting
 
 - **`ModuleNotFoundError: document_reader`** — run `pip install -e .` from the repository root, in the active environment.
-- **Empty or missing PDF text** — the PDF reader returns embedded text only. Image-only pages stay empty until OCR exists.
+- **Insufficient PDF text** — the reader attempts OCR when configured. Install `pytesseract`, `Pillow`, and the Tesseract executable if OCR dependencies are missing.
 - **`Unsupported document type`** — use `.txt` or `.pdf`.
 - **`ExtractionParsingError`** — the model response did not contain a JSON object.
 - **`ExtractionValidationError`** — the JSON object did not match the schema passed on `ExtractionRequest`.

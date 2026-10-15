@@ -283,7 +283,7 @@ InvoiceSchema
 
 # 7. Phase 5 — OCR
 
-**Status: PLANNED**
+**Status: COMPLETE**
 
 Goal:
 
@@ -307,11 +307,11 @@ Can text be extracted?
 
 Tasks:
 
-* [ ] Detect insufficient PDF text
-* [ ] Add OCR support
-* [ ] Convert pages to images
-* [ ] Extract OCR text
-* [ ] Add OCR tests
+* [x] Detect insufficient PDF text
+* [x] Add OCR support
+* [x] Convert pages to images
+* [x] Extract OCR text
+* [x] Add OCR tests
 
 ---
 
@@ -503,7 +503,7 @@ Phase 4 — Structured Extraction
         ✓
 
 Phase 5 — OCR
-        ← CURRENT
+        ✓
 
 Phase 6 — Confidence & Validation
         ○
