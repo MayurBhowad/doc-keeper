@@ -35,12 +35,21 @@ class PDFReader(DocumentReader):
                 text = page.get_text().strip()
 
                 if len(text) < self.min_text_chars:
+                    has_visual_content = bool(
+                        page.get_images(full=True) or page.get_drawings()
+                    )
+
+                    if not text and not has_visual_content:
+                        pages.append("")
+                        continue
+
                     if self.ocr is None:
                         raise RuntimeError(
                             "This PDF page contains insufficient extractable "
                             "text. Configure an OCR implementation to process "
                             "scanned PDFs."
                         )
+
                     text = self.ocr(page).strip()
 
                 pages.append(text)

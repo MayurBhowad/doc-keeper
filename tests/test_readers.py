@@ -65,8 +65,10 @@ def test_pdf_reader_uses_ocr_when_text_is_missing(tmp_path):
     file_path = tmp_path / "scanned.pdf"
 
     # An empty page simulates a PDF page with no extractable text.
+    # A page with visual content simulates a scanned page without extractable text.
     pdf = fitz.open()
-    pdf.new_page()
+    page = pdf.new_page()
+    page.draw_rect(fitz.Rect(72, 72, 200, 200))
     pdf.save(file_path)
     pdf.close()
 
@@ -88,8 +90,11 @@ def test_pdf_reader_combines_ocr_text_in_page_order(tmp_path):
     file_path = tmp_path / "two_pages.pdf"
 
     pdf = fitz.open()
-    pdf.new_page()
-    pdf.new_page()
+
+    for _ in range(2):
+        page = pdf.new_page()
+        page.draw_rect(fitz.Rect(72, 72, 200, 200))
+
     pdf.save(file_path)
     pdf.close()
 
@@ -180,3 +185,61 @@ def test_tesseract_ocr_reports_missing_pillow():
     ):
         with pytest.raises(RuntimeError, match="Pillow"):
             TesseractOCR()(page)
+
+
+def test_pdf_reader_preserves_blank_page_without_ocr(tmp_path):
+    file_path = tmp_path / "blank.pdf"
+
+    with fitz.open() as pdf:
+        pdf.new_page()
+        pdf.save(file_path)
+
+    content = PDFReader().read(Document(path=file_path))
+
+    assert content.text == ""
+
+
+def test_pdf_reader_does_not_call_ocr_for_blank_page(tmp_path):
+    file_path = tmp_path / "blank_with_ocr.pdf"
+
+    with fitz.open() as pdf:
+        pdf.new_page()
+        pdf.save(file_path)
+
+    def unexpected_ocr(_page):
+        raise AssertionError("OCR should not run for a blank page")
+
+    content = PDFReader(ocr=unexpected_ocr).read(Document(path=file_path))
+
+    assert content.text == ""
+
+
+def test_tesseract_ocr_wraps_execution_failure():
+    from unittest.mock import patch
+
+    import pytesseract
+
+    with (
+        patch(
+            "document_reader.readers.ocr.importlib.util.find_spec",
+            return_value=object(),
+        ),
+        patch(
+            "document_reader.readers.ocr.shutil.which",
+            return_value="/usr/bin/tesseract",
+        ),
+        patch(
+            "pytesseract.image_to_string",
+            side_effect=pytesseract.TesseractError(1, "language data unavailable"),
+        ),
+    ):
+        with fitz.open() as pdf:
+            page = pdf.new_page()
+
+            with pytest.raises(
+                RuntimeError,
+                match="Tesseract OCR failed",
+            ) as error:
+                TesseractOCR()(page)
+
+    assert isinstance(error.value.__cause__, pytesseract.TesseractError)

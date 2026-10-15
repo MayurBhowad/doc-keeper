@@ -34,4 +34,10 @@ class TesseractOCR:
             (pixmap.width, pixmap.height),
             pixmap.samples,
         )
-        return pytesseract.image_to_string(image)
+        try:
+            return pytesseract.image_to_string(image)
+        except pytesseract.TesseractError as exc:
+            raise RuntimeError(
+                "Tesseract OCR failed to process this PDF page. "
+                "Check the Tesseract installation and language data."
+            ) from exc
