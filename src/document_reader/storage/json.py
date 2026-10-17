@@ -12,10 +12,21 @@ class JsonStorage:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def save(self, filename: str, result: ExtractionResult) -> Path:
-        output_path = (self.output_dir / f"{Path(filename).stem}.json")
+        output_path = self.output_dir / f"{Path(filename).stem}.json"
+
         data = {
             "filename": filename,
             "data": result.data,
         }
+
+        if result.field_metadata:
+            data["field_metadata"] = {
+                name: {
+                    "confidence": metadata.confidence,
+                    "source_pages": list(metadata.source_pages),
+                }
+                for name, metadata in result.field_metadata.items()
+            }
+
         output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         return output_path

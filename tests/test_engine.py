@@ -229,3 +229,53 @@ def test_engine_rejects_invalid_invoice_schema(tmp_path):
             "Extract invoice details",
             schema=InvoiceSchema,
         )
+
+
+def test_engine_rejects_negative_total_with_business_validator(tmp_path):
+    from document_reader.domain.validator import BusinessRule, BusinessValidator
+
+    input_file = tmp_path / "invoice.txt"
+    input_file.write_text("Invoice total -10", encoding="utf-8")
+
+    class NegativeTotalExtractor:
+        def extract(self, content, request):
+            return ExtractionResult(data={"total": -10})
+
+    engine = DocumentEngine(
+        extractor=NegativeTotalExtractor(),
+        storage=JsonStorage(tmp_path / "output"),
+        business_validator=BusinessValidator(
+            rules=[BusinessRule(field="total", rule="positive")]
+        ),
+    )
+
+    with pytest.raises(ExtractionValidationError) as error:
+        engine.process(str(input_file), "Extract total")
+
+    assert error.value.issues[0]["field"] == "total"
+    assert not (tmp_path / "output" / "invoice.json").exists()
+
+
+def test_engine_saves_result_when_business_rules_pass(tmp_path):
+    from document_reader.domain.validator import BusinessRule, BusinessValidator
+
+    input_file = tmp_path / "invoice.txt"
+    input_file.write_text("Invoice total 15000", encoding="utf-8")
+
+    class PositiveTotalExtractor:
+        def extract(self, content, request):
+            return ExtractionResult(data={"total": 15000})
+
+    output_dir = tmp_path / "output"
+    engine = DocumentEngine(
+        extractor=PositiveTotalExtractor(),
+        storage=JsonStorage(output_dir),
+        business_validator=BusinessValidator(
+            rules=[BusinessRule(field="total", rule="positive")]
+        ),
+    )
+
+    result = engine.process(str(input_file), "Extract total")
+
+    assert result["data"]["total"] == 15000
+    assert (output_dir / "invoice.json").exists()

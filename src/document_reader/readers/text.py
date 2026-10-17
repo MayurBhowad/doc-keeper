@@ -11,4 +11,9 @@ class TextReader(DocumentReader):
         
         text = document.path.read_text(encoding="utf-8")
 
-        return DocumentContent(filename=document.filename, document_type="text", text=text)
+        return DocumentContent(
+            filename=document.filename,
+            document_type="text",
+            text=text,
+            pages=(text,),
+        )

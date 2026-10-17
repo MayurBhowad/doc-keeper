@@ -3,7 +3,7 @@ import time
 from typing import Any
 
 from document_reader.domain.content import DocumentContent
-from document_reader.domain.extraction import ExtractionRequest, ExtractionResult
+from document_reader.domain.extraction import ExtractionRequest, ExtractionResult, FieldMetadata
 from document_reader.domain.validation import (
     ExtractionParsingError,
     ExtractionValidationError,
@@ -43,7 +43,7 @@ class LLMExtractor(DocumentExtractor):
             response = self.client.generate(current_prompt)
 
             try:
-                data = self._parse_response(response)
+                data, field_metadata = self._parse_extraction_response(response)
 
                 if request.schema:
                     data = self.validator.validate(data, request.schema)
@@ -59,6 +59,7 @@ class LLMExtractor(DocumentExtractor):
                         "duration_ms": duration_ms,
                         "model": self.client.model,
                     },
+                    field_metadata=field_metadata,
                 )
 
             except (ExtractionParsingError, ExtractionValidationError) as exc:
@@ -87,31 +88,64 @@ class LLMExtractor(DocumentExtractor):
         schema_instruction = ""
 
         if request.schema:
-            schema = request.schema.model_json_schema()
-            schema_json = json.dumps(schema, indent=2)
-
+            schema_json = json.dumps(
+                request.schema.model_json_schema(),
+                indent=2,
+            )
             schema_instruction = f"""
-            Expected response schema:
-            {schema_json}
+Expected response schema:
+{schema_json}
 
-            Return the extracted data using exactly the fields defined
-            in the schema.
-            """.strip()
+The "data" object must contain exactly the fields defined in this schema.
+""".strip()
+
+        if content.pages:
+            document_text = "\n\n".join(
+                f"Page {page_number}:\n{page_text}"
+                for page_number, page_text in enumerate(
+                    content.pages,
+                    start=1,
+                )
+            )
+        else:
+            document_text = content.text
 
         return f"""
-        You are a document extraction assistant.
+You are a document extraction assistant.
 
-        Document:
-        {content.text}
+Document:
+{document_text}
 
-        User request:
-        {request.query}
+User request:
+{request.query}
 
-        {schema_instruction}
+{schema_instruction}
 
-        Extract the requested information from the document.
-        Return only the extracted result.
-        """.strip()
+Extract the requested information from the document.
+
+For each extracted field, provide optional metadata:
+- confidence: an estimate between 0.0 and 1.0 based on document evidence.
+  This is not a calibrated probability.
+- source_pages: a list of 1-based page numbers supporting the value.
+- Do not invent page numbers or evidence.
+
+Return only a JSON object in this format:
+{{
+  "data": {{
+    "field_name": "extracted value"
+  }},
+  "field_metadata": {{
+    "field_name": {{
+      "confidence": 0.9,
+      "source_pages": [1]
+    }}
+  }}
+}}
+
+Include metadata where possible. If metadata is unavailable, omit it
+rather than inventing it.
+""".strip()
+
 
     def _parse_response(
         self,
@@ -146,3 +180,59 @@ class LLMExtractor(DocumentExtractor):
             )
 
         return data
+
+    def _parse_extraction_response(
+        self,
+        response: str,
+    ) -> tuple[dict[str, Any], dict[str, FieldMetadata]]:
+        parsed = self._parse_response(response)
+
+        # Preserve compatibility with legacy plain-JSON responses.
+        if "data" not in parsed:
+            return parsed, {}
+
+        data = parsed["data"]
+        raw_metadata = parsed.get("field_metadata", {})
+
+        if not isinstance(data, dict):
+            raise ExtractionParsingError(
+                "The 'data' property must be a JSON object."
+            )
+
+        if not isinstance(raw_metadata, dict):
+            raise ExtractionParsingError(
+                "The 'field_metadata' property must be a JSON object."
+            )
+
+        field_metadata: dict[str, FieldMetadata] = {}
+
+        try:
+            for field_name, values in raw_metadata.items():
+                if field_name not in data:
+                    raise ValueError(
+                        f"Metadata references unknown field '{field_name}'."
+                    )
+
+                if not isinstance(values, dict):
+                    raise ValueError(
+                        "Each field metadata entry must be an object keyed by field name."
+                    )
+
+                confidence = values.get("confidence")
+                source_pages = values.get("source_pages", [])
+
+                if not isinstance(source_pages, list):
+                    raise ValueError(
+                        f"source_pages for '{field_name}' must be a list."
+                    )
+
+                field_metadata[field_name] = FieldMetadata(
+                    confidence=confidence,
+                    source_pages=tuple(source_pages),
+                )
+        except (TypeError, ValueError) as exc:
+            raise ExtractionParsingError(
+                f"Invalid field metadata: {exc}"
+            ) from exc
+
+        return data, field_metadata
