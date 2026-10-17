@@ -58,4 +58,5 @@ class PDFReader(DocumentReader):
             filename=document.filename,
             document_type="pdf",
             text="\n".join(pages),
+            pages=tuple(pages),
         )

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from document_reader.domain.extraction import ExtractionRequest
 from document_reader.domain.schema import ExtractionSchema
+from document_reader.domain.validator import BusinessValidator
 from document_reader.extractors.fake import FakeExtractor
 
 from .domain.document import Document
@@ -16,6 +17,7 @@ class DocumentEngine:
         reader_registry=None,
         extractor=None,
         storage=None,
+        business_validator: BusinessValidator | None = None,
     ):
         self.reader_registry = (
             reader_registry or ReaderRegistry()
@@ -24,6 +26,7 @@ class DocumentEngine:
         self.storage = (
             storage or JsonStorage()
         )
+        self.business_validator = business_validator
 
     def process(
         self,
@@ -44,6 +47,12 @@ class DocumentEngine:
         request = ExtractionRequest(query=query, schema=schema)
 
         result = self.extractor.extract(content, request)
+
+        if self.business_validator is not None:
+            self.business_validator.validate(
+                result.data,
+                raise_on_error=True,
+            )
 
         output_path = self.storage.save(content.filename, result)
 
