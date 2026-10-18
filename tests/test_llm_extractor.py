@@ -1193,6 +1193,7 @@ def test_llm_extractor_parses_field_metadata():
         def generate(self, prompt: str) -> str:
             return """
             {
+                "format": "doc-keeper-extraction-v1",
                 "data": {
                     "invoice_number": "INV-123",
                     "vendor_name": "ABC Pvt Ltd",
@@ -1268,6 +1269,7 @@ def test_llm_extractor_rejects_invalid_field_metadata(field_metadata):
         def generate(self, prompt: str) -> str:
             return json.dumps(
                 {
+                    "format": "doc-keeper-extraction-v1",
                     "data": {"total": 100},
                     "field_metadata": field_metadata,
                 }
@@ -1317,6 +1319,7 @@ def test_llm_extractor_rejects_metadata_for_unknown_fields():
         def generate(self, prompt: str) -> str:
             return """
             {
+                "format": "doc-keeper-extraction-v1",
                 "data": {"total": 100},
                 "field_metadata": {
                     "missing_field": {
@@ -1338,3 +1341,31 @@ def test_llm_extractor_rejects_metadata_for_unknown_fields():
             content,
             ExtractionRequest(query="Extract total"),
         )
+
+
+def test_llm_extractor_preserves_legacy_data_field():
+    class LegacyDataFieldClient:
+        model = "test-model"
+
+        def generate(self, prompt: str) -> str:
+            return """
+            {
+                "invoice_number": "INV-123",
+                "data": {"source": "manual"}
+            }
+            """
+
+    result = LLMExtractor(LegacyDataFieldClient()).extract(
+        DocumentContent(
+            filename="invoice.txt",
+            document_type="text",
+            text="Invoice INV-123",
+        ),
+        ExtractionRequest(query="Extract invoice details"),
+    )
+
+    assert result.data == {
+        "invoice_number": "INV-123",
+        "data": {"source": "manual"},
+    }
+    assert result.field_metadata == {}

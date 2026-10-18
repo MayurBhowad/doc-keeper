@@ -129,21 +129,22 @@ For each extracted field, provide optional metadata:
 - source_pages: a list of 1-based page numbers supporting the value.
 - Do not invent page numbers or evidence.
 
-Return only a JSON object in this format:
-{{
-  "data": {{
-    "field_name": "extracted value"
-  }},
-  "field_metadata": {{
-    "field_name": {{
-      "confidence": 0.9,
-      "source_pages": [1]
+    Return only a JSON object in this format:
+    {{
+      "format": "doc-keeper-extraction-v1",
+      "data": {{
+        "field_name": "extracted value"
+      }},
+      "field_metadata": {{
+        "field_name": {{
+          "confidence": 0.9,
+          "source_pages": [1]
+        }}
+      }}
     }}
-  }}
-}}
 
-Include metadata where possible. If metadata is unavailable, omit it
-rather than inventing it.
+    The "field_metadata" property must always be an object.
+    Use {{}} when metadata is unavailable.
 """.strip()
 
 
@@ -187,12 +188,12 @@ rather than inventing it.
     ) -> tuple[dict[str, Any], dict[str, FieldMetadata]]:
         parsed = self._parse_response(response)
 
-        # Preserve compatibility with legacy plain-JSON responses.
-        if "data" not in parsed:
+        # Only parse the new envelope when its explicit marker is present.
+        if parsed.get("format") != "doc-keeper-extraction-v1":
             return parsed, {}
 
-        data = parsed["data"]
-        raw_metadata = parsed.get("field_metadata", {})
+        data = parsed.get("data")
+        raw_metadata = parsed.get("field_metadata")
 
         if not isinstance(data, dict):
             raise ExtractionParsingError(
