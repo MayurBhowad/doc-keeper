@@ -96,3 +96,62 @@ def test_validator_rejects_unexpected_field():
             },
             InvoiceExtraction,
         )
+
+
+def test_validator_exposes_structured_issues_for_missing_field():
+    validator = ExtractionValidator()
+
+    with pytest.raises(ExtractionValidationError) as error:
+        validator.validate(
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+            },
+            InvoiceExtraction,
+        )
+
+    assert error.value.issues
+    issue = next(
+        item for item in error.value.issues
+        if item["field"] == "total"
+    )
+    assert issue["type"] == "missing"
+    assert "required" in issue["message"].lower()
+
+
+def test_validator_exposes_structured_issues_for_extra_field():
+    validator = ExtractionValidator()
+
+    with pytest.raises(ExtractionValidationError) as error:
+        validator.validate(
+            {
+                "invoice_number": "INV-123",
+                "vendor_name": "ABC Pvt Ltd",
+                "total": 15000,
+                "unexpected": "value",
+            },
+            InvoiceExtraction,
+        )
+
+    issue = next(
+        item for item in error.value.issues
+        if item["field"] == "unexpected"
+    )
+    assert issue["type"] == "extra_forbidden"
+    assert issue["message"]
+
+
+def test_validation_error_string_remains_readable():
+    error = ExtractionValidationError(
+        "Invalid invoice total",
+        issues=[
+            {
+                "field": "total",
+                "type": "greater_than",
+                "message": "Value must be positive",
+            }
+        ],
+    )
+
+    assert "Invalid invoice total" in str(error)
+    assert error.issues[0]["field"] == "total"

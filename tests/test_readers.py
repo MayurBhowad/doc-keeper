@@ -258,3 +258,29 @@ def test_tesseract_ocr_wraps_execution_failure():
                 TesseractOCR()(page)
 
     assert isinstance(error.value.__cause__, FakeTesseractError)
+
+
+def test_pdf_reader_preserves_page_text(tmp_path):
+    file_path = tmp_path / "two_pages.pdf"
+
+    with fitz.open() as pdf:
+        first_page = pdf.new_page()
+        first_page.insert_text((72, 72), "Invoice INV-123")
+        second_page = pdf.new_page()
+        second_page.insert_text((72, 72), "Total 15000")
+        pdf.save(file_path)
+
+    content = PDFReader().read(Document(path=file_path))
+
+    assert content.text == "Invoice INV-123\nTotal 15000"
+    assert content.pages == ("Invoice INV-123", "Total 15000")
+
+
+def test_text_reader_preserves_content_as_single_page(tmp_path):
+    file_path = tmp_path / "invoice.txt"
+    file_path.write_text("Invoice INV-123\nTotal 15000", encoding="utf-8")
+
+    content = TextReader().read(Document(path=file_path))
+
+    assert content.text == "Invoice INV-123\nTotal 15000"
+    assert content.pages == ("Invoice INV-123\nTotal 15000",)

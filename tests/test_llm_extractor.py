@@ -1184,3 +1184,188 @@ def test_llm_extractor_reports_model_metadata_without_schema():
 
     assert result.metadata["attempts"] == 1
     assert result.metadata["model"] == "test-model"
+
+
+def test_llm_extractor_parses_field_metadata():
+    class MetadataFakeLLMClient:
+        model = "test-model"
+
+        def generate(self, prompt: str) -> str:
+            return """
+            {
+                "format": "doc-keeper-extraction-v1",
+                "data": {
+                    "invoice_number": "INV-123",
+                    "vendor_name": "ABC Pvt Ltd",
+                    "total": 15000
+                },
+                "field_metadata": {
+                    "invoice_number": {
+                        "confidence": 0.98,
+                        "source_pages": [1]
+                    },
+                    "vendor_name": {
+                        "confidence": 0.95,
+                        "source_pages": [1]
+                    },
+                    "total": {
+                        "confidence": 0.62,
+                        "source_pages": [2]
+                    }
+                }
+            }
+            """
+
+    from document_reader.domain.content import DocumentContent
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+        pages=("Invoice INV-123 ABC Pvt Ltd", "Total 15000"),
+    )
+
+    result = LLMExtractor(MetadataFakeLLMClient()).extract(
+        content,
+        ExtractionRequest(query="Extract invoice details"),
+    )
+
+    assert result.data["invoice_number"] == "INV-123"
+    assert result.field_metadata["invoice_number"].confidence == 0.98
+    assert result.field_metadata["invoice_number"].source_pages == (1,)
+    assert result.field_metadata["total"].source_pages == (2,)
+    assert result.field_metadata["total"].is_low_confidence(threshold=0.7)
+
+
+def test_llm_extractor_supports_legacy_plain_json_response():
+    result = LLMExtractor(FakeLLMClient()).extract(
+        DocumentContent(
+            filename="invoice.txt",
+            document_type="txt",
+            text="Invoice INV-123 ABC Pvt Ltd Total 15000",
+        ),
+        ExtractionRequest(query="Extract invoice details"),
+    )
+
+    assert result.data["invoice_number"] == "INV-123"
+    assert result.field_metadata == {}
+
+
+@pytest.mark.parametrize(
+    "field_metadata",
+    [
+        {"total": {"confidence": 1.5, "source_pages": [1]}},
+        {"total": {"confidence": 0.8, "source_pages": [0]}},
+        {"total": {"confidence": 0.8, "source_pages": "1"}},
+        [],
+    ],
+)
+def test_llm_extractor_rejects_invalid_field_metadata(field_metadata):
+    import json
+
+    class InvalidMetadataClient:
+        model = "test-model"
+
+        def generate(self, prompt: str) -> str:
+            return json.dumps(
+                {
+                    "format": "doc-keeper-extraction-v1",
+                    "data": {"total": 100},
+                    "field_metadata": field_metadata,
+                }
+            )
+
+    content = DocumentContent(
+        filename="invoice.txt",
+        document_type="txt",
+        text="Total 100",
+    )
+
+    with pytest.raises(ExtractionParsingError, match="metadata"):
+        LLMExtractor(InvalidMetadataClient()).extract(
+            content,
+            ExtractionRequest(query="Extract total"),
+        )
+
+
+def test_llm_extractor_prompt_requests_confidence_and_page_evidence():
+    client = FakeLLMClient()
+    extractor = LLMExtractor(client)
+
+    content = DocumentContent(
+        filename="invoice.pdf",
+        document_type="pdf",
+        text="Invoice INV-123 Total 15000",
+        pages=("Invoice INV-123", "Total 15000"),
+    )
+
+    extractor.extract(
+        content,
+        ExtractionRequest(query="Extract invoice details"),
+    )
+
+    prompt = client.last_prompt
+
+    assert "confidence" in prompt
+    assert "source_pages" in prompt
+    assert "Page 1" in prompt
+    assert "Page 2" in prompt
+
+
+def test_llm_extractor_rejects_metadata_for_unknown_fields():
+    class UnknownMetadataFieldClient:
+        model = "test-model"
+
+        def generate(self, prompt: str) -> str:
+            return """
+            {
+                "format": "doc-keeper-extraction-v1",
+                "data": {"total": 100},
+                "field_metadata": {
+                    "missing_field": {
+                        "confidence": 0.9,
+                        "source_pages": [1]
+                    }
+                }
+            }
+            """
+
+    content = DocumentContent(
+        filename="invoice.txt",
+        document_type="txt",
+        text="Total 100",
+    )
+
+    with pytest.raises(ExtractionParsingError, match="unknown field"):
+        LLMExtractor(UnknownMetadataFieldClient()).extract(
+            content,
+            ExtractionRequest(query="Extract total"),
+        )
+
+
+def test_llm_extractor_preserves_legacy_data_field():
+    class LegacyDataFieldClient:
+        model = "test-model"
+
+        def generate(self, prompt: str) -> str:
+            return """
+            {
+                "invoice_number": "INV-123",
+                "data": {"source": "manual"}
+            }
+            """
+
+    result = LLMExtractor(LegacyDataFieldClient()).extract(
+        DocumentContent(
+            filename="invoice.txt",
+            document_type="text",
+            text="Invoice INV-123",
+        ),
+        ExtractionRequest(query="Extract invoice details"),
+    )
+
+    assert result.data == {
+        "invoice_number": "INV-123",
+        "data": {"source": "manual"},
+    }
+    assert result.field_metadata == {}

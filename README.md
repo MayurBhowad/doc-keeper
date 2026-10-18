@@ -22,7 +22,7 @@ Store
 
 Doc-Keeper is currently being developed incrementally.
 
-Text and PDF reading, the extraction interface, an OpenAI-backed extractor, and optional schema validation are in place. `DocumentEngine` still uses `FakeExtractor` unless an `LLMExtractor` is supplied. There is no CLI or HTTP API yet.
+Text and PDF reading, an OpenAI-backed extractor, optional schema validation, field-level confidence metadata, source-page attribution, and configurable business-rule validation are implemented. `DocumentEngine` still uses `FakeExtractor` unless an `LLMExtractor` is supplied. Confidence scores and page attribution are model-reported estimates and are not independently verified. There is no CLI or HTTP API yet.
 
 ```text
 Phase 1 — Core Reader
@@ -41,7 +41,7 @@ Phase 5 — OCR
         ✓
 
 Phase 6 — Confidence & Validation
-        ○
+        ✓
 
 Phase 7 — Human Review
         ○
@@ -55,6 +55,8 @@ Phase 9 — Async Processing
 Phase 10 — Production Infrastructure
         ○
 ```
+
+Phase 6 adds optional `field_metadata` to extraction results. Each field can include a `confidence` estimate and `source_pages` list. Schema validation and configured business rules run before storage; validation failures can expose structured issues. Legacy plain-JSON LLM responses remain supported.
 
 Phase 3 is usable by passing `LLMExtractor` into the engine. Phase 4 supports optional Pydantic schemas through `DocumentEngine.process(path, query, schema=InvoiceSchema)`. The schema guides extraction and validates the parsed result before storage.
 

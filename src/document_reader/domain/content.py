@@ -6,3 +6,4 @@ class DocumentContent:
     filename: str
     document_type: str
     text: str
+    pages: tuple[str, ...] = ()

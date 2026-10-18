@@ -213,6 +213,69 @@ Schema validation is optional. Existing calls that omit `schema` retain their pr
 
 `data` depends on the extractor. `FakeExtractor` always includes `query`, `filename`, and `text`. `LLMExtractor` returns the parsed object, or the validated object when a schema was provided.
 
+### Field confidence and source pages
+
+`LLMExtractor` supports an optional response envelope containing `data` and
+`field_metadata`. Each metadata entry can include a confidence estimate and
+1-based source page numbers:
+
+```json
+{
+  "filename": "invoice.pdf",
+  "data": {
+    "invoice_number": "INV-123",
+    "total": 15000
+  },
+  "field_metadata": {
+    "invoice_number": {
+      "confidence": 0.98,
+      "source_pages": [1]
+    },
+    "total": {
+      "confidence": 0.62,
+      "source_pages": [2]
+    }
+  }
+}
+```
+
+The saved JSON includes `field_metadata` only when metadata is present.
+Legacy plain-JSON model responses continue to work and produce no field metadata.
+
+Confidence values are model-reported estimates, not calibrated probabilities.
+Page attribution is also model-reported and is not independently verified.
+Missing metadata should be treated as unknown, not as zero confidence.
+
+Use `FieldMetadata.is_low_confidence()` to check a score against a threshold:
+
+```python
+from document_reader.domain.extraction import FieldMetadata
+
+metadata = FieldMetadata(confidence=0.62, source_pages=(2,))
+print(metadata.is_low_confidence(threshold=0.7))  # True
+```
+
+### Business-rule validation
+
+Business rules are optional. Configure a `BusinessValidator` when constructing
+the engine to reject extracted values that violate those rules before storage:
+
+```python
+from document_reader.domain.validator import BusinessRule, BusinessValidator
+from document_reader.engine import DocumentEngine
+
+engine = DocumentEngine(
+    business_validator=BusinessValidator(
+        rules=[BusinessRule(field="total", rule="positive")]
+    )
+)
+```
+
+The built-in `positive` rule requires a finite numeric value greater than zero.
+A violation raises `ExtractionValidationError`, which exposes structured issues
+through its `issues` attribute. Schema validation errors also provide structured
+issue details.
+
 ### Errors
 
 | Situation | Exception |
@@ -222,7 +285,8 @@ Schema validation is optional. Existing calls that omit `schema` retain their pr
 | Model response has no JSON object, is invalid JSON, or is not an object | `ExtractionParsingError` |
 | Schema is set and the object is missing fields, has extra fields, or has the wrong types | `ExtractionValidationError` |
 
-Confidence scores, source pages, and review status are not part of the result yet.
+Confidence scores and source-page metadata are supported through optional
+`field_metadata`. Review status and a human-review workflow are not implemented yet.
 
 ---
 
