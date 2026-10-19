@@ -14,17 +14,8 @@ class ReviewService:
         review_id: str,
         extraction: ExtractionResult,
     ) -> ReviewRecord:
-        try:
-            self.storage.load(review_id)
-        except FileNotFoundError:
-            pass
-        else:
-            raise FileExistsError(
-                f"Review already exists: {review_id}"
-            )
-
         record = ReviewRecord(extraction=extraction)
-        self.storage.save(review_id, record)
+        self.storage.create(review_id, record)
         return record
 
     def get(self, review_id: str) -> ReviewRecord:
