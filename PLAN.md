@@ -379,7 +379,7 @@ Scope and limitations:
 
 - Review creation is explicit; confidence does not automatically route records.
 - No UI, HTTP API, authentication, or automatic assignment.
-- Concurrent duplicate creation is not protected by an atomic storage operation.
+- Concurrent duplicate creation is prevented by exclusive file creation; crash-safe writes are not guaranteed.
 
 See `user_guide.md` for usage.
 
