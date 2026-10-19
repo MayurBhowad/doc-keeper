@@ -22,7 +22,13 @@ Store
 
 Doc-Keeper is currently being developed incrementally.
 
-Text and PDF reading, an OpenAI-backed extractor, optional schema validation, field-level confidence metadata, source-page attribution, and configurable business-rule validation are implemented. `DocumentEngine` still uses `FakeExtractor` unless an `LLMExtractor` is supplied. Confidence scores and page attribution are model-reported estimates and are not independently verified. There is no CLI or HTTP API yet.
+Text and PDF reading, an OpenAI-backed extractor, optional schema validation,
+field-level confidence metadata, source-page attribution, configurable
+business-rule validation, and a Python-based human-review workflow are
+implemented. `DocumentEngine` still uses `FakeExtractor` unless an
+`LLMExtractor` is supplied. Confidence scores and page attribution are
+model-reported estimates and are not independently verified. Human review is
+explicitly initiated through `ReviewService`; there is no CLI or HTTP API yet.
 
 ```text
 Phase 1 — Core Reader
@@ -43,8 +49,8 @@ Phase 5 — OCR
 Phase 6 — Confidence & Validation
         ✓
 
-Phase 7 — Human Review
-        ○
+Phase 7 — Human Review (implemented)
+        ✓
 
 Phase 8 — API
         ○
