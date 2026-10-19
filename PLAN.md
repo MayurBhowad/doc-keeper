@@ -359,33 +359,29 @@ Example:
 
 # 9. Phase 7 — Human Review
 
-**Status: PLANNED**
+**Status: IMPLEMENTED — awaiting final verification**
 
 Goal:
 
-Allow humans to review and correct uncertain extraction.
+Allow humans to review and correct extraction results.
 
-Flow:
+Implemented:
 
-```text
-Extraction
-    ↓
-Confidence
-    ↓
- ┌───────────────┐
- │               │
-High            Low
- │               │
- ↓               ↓
-Approve       Human Review
-```
+- [x] Review state (`pending`, `approved`, `rejected`)
+- [x] Field corrections while a review is pending
+- [x] Explicit approval and rejection
+- [x] JSON persistence and reload of review records
+- [x] Preserve original values separately from corrections
+- [x] Validate review IDs and prevent sequential duplicate creation
+- [x] Tests for state transitions, corrections, persistence, and invalid inputs
 
-Tasks:
+Scope and limitations:
 
-* [ ] Review state
-* [ ] Editable extracted values
-* [ ] Approve/reject
-* [ ] Store corrections
+- Review creation is explicit; confidence does not automatically route records.
+- No UI, HTTP API, authentication, or automatic assignment.
+- Concurrent duplicate creation is not protected by an atomic storage operation.
+
+See `user_guide.md` for usage.
 
 ---
 
@@ -509,7 +505,7 @@ Phase 6 — Confidence & Validation
         ✓
 
 Phase 7 — Human Review
-        ○
+        ✓
 
 Phase 8 — API
         ○
