@@ -286,9 +286,57 @@ issue details.
 | Schema is set and the object is missing fields, has extra fields, or has the wrong types | `ExtractionValidationError` |
 
 Confidence scores and source-page metadata are supported through optional
-`field_metadata`. Review status and a human-review workflow are not implemented yet.
+`field_metadata`. The human-review workflow is available through `ReviewService`
+and `ReviewJsonStorage`, described below. Review creation is explicit; extraction
+does not automatically create review items or route them based on confidence.
 
 ---
+
+## Human review workflow
+
+Human review is available as a Python service. It is separate from
+`DocumentEngine`, so existing extraction behavior and the legacy JSON output
+remain unchanged.
+
+A review record contains:
+
+- `pending`, `approved`, or `rejected` status
+- Original extracted values
+- Corrected values stored separately
+- Effective values, where corrections override original values
+- Available field confidence and source-page metadata
+
+Create a review explicitly from an `ExtractionResult`:
+
+```python
+from document_reader.domain.extraction import ExtractionResult, FieldMetadata
+from document_reader.services.review import ReviewService
+from document_reader.storage.review_json import ReviewJsonStorage
+
+storage = ReviewJsonStorage("output/reviews")
+reviews = ReviewService(storage)
+
+extraction = ExtractionResult(
+    data={"invoice_number": "INV-123", "total": 15000},
+    field_metadata={
+        "total": FieldMetadata(confidence=0.62, source_pages=(2,))
+    },
+)
+
+record = reviews.create("invoice-123", extraction)
+print(record.status.value)  # pending
+
+# Correct a field, then approve the record.
+record = reviews.correct("invoice-123", "total", 15500)
+print(record.effective_data)  # total is 15500; original remains 15000
+
+record = reviews.approve("invoice-123")
+
+# Reload the persisted record.
+record = reviews.get("invoice-123")
+print(record.status.value)       # approved
+print(record.extraction.data)    # original extracted values
+print(record.effective_data)     # values with corrections applied
 
 ## Configuration
 
