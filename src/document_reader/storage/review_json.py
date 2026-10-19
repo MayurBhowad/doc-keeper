@@ -23,12 +23,8 @@ class ReviewJsonStorage:
 
         return self.output_dir / f"{review_id}.json"
 
-    def save(self, review_id: str, record: ReviewRecord) -> Path:
-        if not isinstance(record, ReviewRecord):
-            raise TypeError("record must be a ReviewRecord")
-
-        output_path = self._path_for(review_id)
-        data = {
+    def _serialize(self, review_id: str, record: ReviewRecord) -> dict:
+        return {
             "review_id": review_id,
             "status": record.status.value,
             "original_data": record.extraction.data,
@@ -44,10 +40,36 @@ class ReviewJsonStorage:
             },
         }
 
+    def save(self, review_id: str, record: ReviewRecord) -> Path:
+        if not isinstance(record, ReviewRecord):
+            raise TypeError("record must be a ReviewRecord")
+
+        output_path = self._path_for(review_id)
+        data = self._serialize(review_id, record)
+
         output_path.write_text(
             json.dumps(data, indent=2, allow_nan=False),
             encoding="utf-8",
         )
+        return output_path
+
+    def create(self, review_id: str, record: ReviewRecord) -> Path:
+        """Create a review without overwriting an existing record."""
+        if not isinstance(record, ReviewRecord):
+            raise TypeError("record must be a ReviewRecord")
+
+        output_path = self._path_for(review_id)
+        data = self._serialize(review_id, record)
+        payload = json.dumps(data, indent=2, allow_nan=False) + "\n"
+
+        try:
+            with output_path.open("x", encoding="utf-8") as file:
+                file.write(payload)
+        except FileExistsError:
+            raise FileExistsError(
+                f"Review already exists: {review_id}"
+            ) from None
+
         return output_path
 
     def load(self, review_id: str) -> ReviewRecord:
@@ -65,7 +87,11 @@ class ReviewJsonStorage:
 
             original_data = saved.get("original_data")
             corrected_data = saved.get("corrected_data")
+            metadata = saved.get("metadata")
             raw_metadata = saved.get("field_metadata", {})
+
+            if metadata is not None and not isinstance(metadata, dict):
+                raise ValueError("metadata must be an object or null")
             if not isinstance(original_data, dict):
                 raise ValueError("original_data must be an object")
             if not isinstance(corrected_data, dict):
@@ -89,7 +115,7 @@ class ReviewJsonStorage:
 
             extraction = ExtractionResult(
                 data=original_data,
-                metadata=saved.get("metadata"),
+                metadata=metadata,
                 field_metadata=field_metadata,
             )
             record = ReviewRecord(
