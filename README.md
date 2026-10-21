@@ -24,11 +24,14 @@ Doc-Keeper is currently being developed incrementally.
 
 Text and PDF reading, an OpenAI-backed extractor, optional schema validation,
 field-level confidence metadata, source-page attribution, configurable
-business-rule validation, and a Python-based human-review workflow are
-implemented. `DocumentEngine` still uses `FakeExtractor` unless an
-`LLMExtractor` is supplied. Confidence scores and page attribution are
-model-reported estimates and are not independently verified. Human review is
-explicitly initiated through `ReviewService`; there is no CLI or HTTP API yet.
+business-rule validation, a Python-based human-review workflow, and an initial
+FastAPI extraction API are implemented. `DocumentEngine` still uses
+`FakeExtractor` unless an `LLMExtractor` is supplied. The HTTP API configures
+the OpenAI-backed extractor from environment settings. Confidence scores and
+page attribution are model-reported estimates and are not independently
+verified. Human review is explicitly initiated through `ReviewService`; the
+initial HTTP API does not expose review-management endpoints.
+
 
 ```text
 Phase 1 — Core Reader
@@ -53,7 +56,7 @@ Phase 7 — Human Review (implemented)
         ✓
 
 Phase 8 — API
-        ○
+        ✓
 
 Phase 9 — Async Processing
         ○
@@ -232,6 +235,72 @@ result = engine.process(
 `FakeExtractor` returns the query, filename, and document text. It does not call a model.
 
 To extract with OpenAI, pass `LLMExtractor` explicitly. Set `OPENAI_API_KEY` in the environment. See the [User Guide](user_guide.md).
+
+## HTTP API
+
+The initial HTTP API exposes document extraction through FastAPI.
+
+### Configuration
+
+Install the project dependencies:
+
+```bash
+pip install -r requirements.txt
+pip install -e .
+```
+
+Configure the OpenAI API key and, optionally, the model and output directory:
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_MODEL="gpt-5.6-mini"
+export DOC_KEEPER_OUTPUT_DIR="output"
+```
+
+Start the local development server:
+
+```bash
+uvicorn document_reader.api:app --reload
+```
+
+The API is available at `http://127.0.0.1:8000`. Interactive API documentation
+is available at `/docs`.
+
+### Health check
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+Example response:
+
+```json
+{"status": "ok"}
+```
+
+### Extract from a document
+
+Send a multipart request containing a `.txt` or `.pdf` file and a query:
+
+```bash
+curl -X POST http://127.0.0.1:8000/extract \
+  -F "file=@invoice.pdf" \
+  -F "query=Extract invoice number, vendor name, and total"
+```
+
+The response contains the original filename, extracted `data`, and any
+available `metadata` or `field_metadata`. The API does not return the server's
+storage path. Results are also saved by the configured JSON storage component.
+
+Uploads are limited to 10 MiB. Unsupported extensions return HTTP 415; missing
+fields, empty uploads, unreadable documents, and extraction-validation failures
+return HTTP 422. Unexpected extraction failures return HTTP 500 with a generic
+error message. The initial API does not include authentication, asynchronous
+processing, or human-review endpoints.
+
+The API uses the existing `DocumentEngine` and configures an
+`LLMExtractor`; API tests use fake extractors and do not require live OpenAI
+requests.
 
 ## Development
 
