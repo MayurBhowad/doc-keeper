@@ -33,6 +33,7 @@ class DocumentEngine:
         path: str,
         query: str,
         schema: type[ExtractionSchema] | None = None,
+        output_filename: str | None = None,
     ):
         document = Document(
             path=Path(path)
@@ -54,10 +55,27 @@ class DocumentEngine:
                 raise_on_error=True,
             )
 
-        output_path = self.storage.save(content.filename, result)
+        output_path = self.storage.save(
+            output_filename or content.filename,
+            result,
+        )
 
-        return {
+        response = {
             "filename": content.filename,
             "data": result.data,
             "output": str(output_path),
         }
+
+        if result.metadata is not None:
+            response["metadata"] = result.metadata
+
+        if result.field_metadata:
+            response["field_metadata"] = {
+                name: {
+                    "confidence": metadata.confidence,
+                    "source_pages": list(metadata.source_pages),
+                }
+                for name, metadata in result.field_metadata.items()
+            }
+
+        return response

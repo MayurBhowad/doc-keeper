@@ -387,27 +387,49 @@ See `user_guide.md` for usage.
 
 # 10. Phase 8 — API
 
-**Status: PLANNED**
+**Status: INITIAL IMPLEMENTATION COMPLETE**
 
-Only after the core engine is stable.
+The initial HTTP API exposes the existing `DocumentEngine` through FastAPI.
 
-Target:
+Implemented endpoints:
 
-```text
-Client
-  ↓
-FastAPI
-  ↓
-DocumentEngine
-```
+- `GET /health` — returns the service health status.
+- `POST /extract` — accepts `.txt` and `.pdf` multipart uploads and an
+  extraction query, then returns extracted data and available metadata.
+
+Implemented safeguards and behavior:
+
+- Configures the OpenAI-backed extractor through environment settings.
+- Limits uploads to 10 MiB and uses chunked reads.
+- Uses unique output filenames for uploaded documents.
+- Rejects unsupported extensions, empty uploads, and invalid requests.
+- Returns consistent client errors without exposing extraction exception
+  messages.
+- Cleans up temporary upload files after success and failure.
+- Preserves the existing `DocumentEngine` library interface.
+- Includes endpoint tests that do not require live OpenAI requests.
 
 Tasks:
 
-* [ ] Upload endpoint
-* [ ] Processing endpoint
-* [ ] Result endpoint
-* [ ] Error handling
-* [ ] API tests
+- [x] Configure FastAPI
+- [x] Create a separate API application module
+- [x] Implement the health endpoint
+- [x] Implement the extraction upload endpoint
+- [x] Reuse the existing engine, readers, extractor, and storage
+- [x] Configure the extractor through environment settings
+- [x] Implement API error handling
+- [x] Add API tests
+- [x] Document local setup and endpoint usage
+
+Out of scope for this initial implementation:
+
+- Authentication and authorization
+- Asynchronous processing
+- Human-review management endpoints
+- Production deployment and infrastructure configuration
+
+Follow-up hardening may add stricter document validation, broader error
+classification, and additional integration coverage.
 
 ---
 

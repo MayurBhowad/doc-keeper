@@ -279,3 +279,39 @@ def test_engine_saves_result_when_business_rules_pass(tmp_path):
 
     assert result["data"]["total"] == 15000
     assert (output_dir / "invoice.json").exists()
+
+
+def test_engine_returns_extraction_metadata(tmp_path):
+    from document_reader.domain.extraction import FieldMetadata
+
+    input_file = tmp_path / "invoice.txt"
+    input_file.write_text("Invoice INV-123", encoding="utf-8")
+
+    class MetadataExtractor:
+        def extract(self, content, request):
+            return ExtractionResult(
+                data={"invoice_number": "INV-123"},
+                metadata={"model": "test-model", "attempts": 1},
+                field_metadata={
+                    "invoice_number": FieldMetadata(
+                        confidence=0.95,
+                        source_pages=(1,),
+                    )
+                },
+            )
+
+    engine = DocumentEngine(
+        extractor=MetadataExtractor(),
+        storage=JsonStorage(tmp_path / "output"),
+    )
+
+    result = engine.process(str(input_file), "Extract invoice number")
+
+    assert result["data"] == {"invoice_number": "INV-123"}
+    assert result["metadata"] == {"model": "test-model", "attempts": 1}
+    assert result["field_metadata"] == {
+        "invoice_number": {
+            "confidence": 0.95,
+            "source_pages": [1],
+        }
+    }
