@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Annotated
 import uuid
 import fitz
+import logging
 
 from document_reader.domain.validation import (
     ExtractionParsingError,
@@ -17,6 +18,7 @@ from document_reader.config.settings import Settings
 from document_reader.engine import DocumentEngine
 from document_reader.extractors.llm import LLMExtractor
 from document_reader.llm.openai import OpenAIClient
+from document_reader.llm.ollama import OllamaClient
 from document_reader.storage.json import JsonStorage
 from fastapi.responses import JSONResponse
 
@@ -37,15 +39,25 @@ async def handle_api_configuration_error(request, exc):
     )
 
 
+
 def create_engine() -> DocumentEngine:
-    """Create an engine configured for real LLM-based extraction."""
+    """Create an engine configured for the selected LLM provider."""
     settings = Settings()
-    if not settings.openai_api_key:
+
+    if settings.llm_provider == "ollama":
+        llm_client = OllamaClient(settings)
+    elif settings.llm_provider == "openai":
+        if not settings.openai_api_key:
+            raise APIConfigurationError(
+                "Extraction service is not configured."
+            )
+        llm_client = OpenAIClient(settings)
+    else:
         raise APIConfigurationError(
-            "Extraction service is not configured."
+            f"Unsupported LLM provider: {settings.llm_provider}"
         )
 
-    extractor = LLMExtractor(OpenAIClient(settings))
+    extractor = LLMExtractor(llm_client)
     return DocumentEngine(
         extractor=extractor,
         storage=JsonStorage(os.getenv("DOC_KEEPER_OUTPUT_DIR", "output")),
@@ -147,6 +159,9 @@ async def extract_document(
             detail="Extraction service is not configured.",
         ) from exc
     except Exception as exc:
+        logging.getLogger(__name__).exception(
+            "Document extraction failed"
+        )
         raise HTTPException(
             status_code=500,
             detail="Document extraction failed.",
