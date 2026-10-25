@@ -28,7 +28,113 @@ ALLOWED_EXTENSIONS = {".txt", ".pdf"}
 class APIConfigurationError(RuntimeError):
     """Raised when the API cannot initialize its extraction engine."""
 
+class RequestBodyLimitMiddleware:
+    """Reject requests whose body exceeds the configured size limit."""
+
+    def __init__(self, app, max_body_bytes: int) -> None:
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        content_length = next(
+            (
+                value.decode("latin-1")
+                for name, value in scope["headers"]
+                if name.lower() == b"content-length"
+            ),
+            None,
+        )
+
+        if content_length is not None:
+            try:
+                declared_length = int(content_length)
+            except ValueError:
+                await self._reject(send, 400, "Invalid Content-Length header.")
+                return
+
+            if declared_length < 0:
+                await self._reject(send, 400, "Invalid Content-Length header.")
+                return
+
+            if declared_length > self.max_body_bytes:
+                await self._reject(
+                    send,
+                    413,
+                    "Request body exceeds the permitted size.",
+                )
+                return
+
+        received_bytes = 0
+        response_started = False
+
+        async def limited_receive():
+            nonlocal received_bytes
+            message = await receive()
+
+            if message["type"] == "http.request":
+                received_bytes += len(message.get("body", b""))
+
+                if received_bytes > self.max_body_bytes:
+                    raise RequestBodyTooLarge
+
+            return message
+
+        async def tracked_send(message):
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, limited_receive, tracked_send)
+        except RequestBodyTooLarge:
+            if response_started:
+                raise
+
+            await self._reject(
+                send,
+                413,
+                "Request body exceeds the permitted size.",
+            )
+
+    @staticmethod
+    async def _reject(send, status_code: int, detail: str) -> None:
+        import json
+
+        body = json.dumps({"detail": detail}).encode("utf-8")
+        await send(
+            {
+                "type": "http.response.start",
+                "status": status_code,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode("ascii")),
+                ],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": body,
+            }
+        )
+
+
+class RequestBodyTooLarge(Exception):
+    """Raised when a streamed request body exceeds the limit."""
+
+
+MAX_REQUEST_BODY_SIZE = MAX_UPLOAD_BYTES + 1024 * 1024
+
 app = FastAPI(title="Doc-Keeper API", version="0.1.0")
+app.add_middleware(
+    RequestBodyLimitMiddleware,
+    max_body_bytes=MAX_REQUEST_BODY_SIZE,
+)
 
 
 @app.exception_handler(APIConfigurationError)

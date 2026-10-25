@@ -391,3 +391,51 @@ def test_extract_rejects_empty_pdf_and_cleans_temp_file(tmp_path):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "Uploaded file must not be empty."
+
+
+def test_extract_rejects_invalid_utf8_text_and_cleans_temp_file(
+    tmp_path,
+    monkeypatch,
+):
+    engine = DocumentEngine(
+        extractor=FakeExtractor(),
+        storage=JsonStorage(tmp_path / "output"),
+    )
+    app.dependency_overrides[get_engine] = lambda: engine
+    temp_paths = []
+
+    original_named_temp_file = api_module.tempfile.NamedTemporaryFile
+
+    def tracking_temp_file(*args, **kwargs):
+        temp_file = original_named_temp_file(*args, **kwargs)
+        temp_paths.append(temp_file.name)
+        return temp_file
+
+    monkeypatch.setattr(
+        api_module.tempfile,
+        "NamedTemporaryFile",
+        tracking_temp_file,
+    )
+
+    try:
+        with TestClient(app) as test_client:
+            response = test_client.post(
+                "/extract",
+                files={
+                    "file": (
+                        "invalid.txt",
+                        b"Invalid UTF-8: \xff\xfe",
+                        "text/plain",
+                    )
+                },
+                data={"query": "Extract the text"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Uploaded text document is not valid UTF-8."
+    )
+    assert len(temp_paths) == 1
+    assert not Path(temp_paths[0]).exists()
