@@ -205,6 +205,32 @@ def test_extract_rejects_oversized_upload():
     assert engine.calls == []
 
 
+def test_extract_rejects_request_body_over_limit():
+    engine = FakeEngine()
+    app.dependency_overrides[get_engine] = lambda: engine
+
+    try:
+        with TestClient(app) as test_client:
+            response = test_client.post(
+                "/extract",
+                content=b"x" * (api_module.MAX_REQUEST_BODY_SIZE + 1),
+                headers={
+                    "Content-Type": "application/octet-stream",
+                    "Content-Length": str(
+                        api_module.MAX_REQUEST_BODY_SIZE + 1
+                    ),
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == (
+        "Request body exceeds the permitted size."
+    )
+    assert engine.calls == []
+
+
 def test_extract_rejects_missing_file(client):
     test_client, engine = client
 
