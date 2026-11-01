@@ -159,25 +159,17 @@ No LLM has been introduced yet.
 
 # 5. Phase 3 — First AI Extractor
 
-**Status: NEXT**
+**Status: VERIFIED**
 
-This is the current development target.
+The LLM extraction implementation is complete. `LLMExtractor` is integrated with the existing engine, and the API configures it as the production extractor.
 
-Goal:
+`FakeExtractor` remains the default for `DocumentEngine` to preserve deterministic behavior for library users and tests.
 
-Replace:
+**Goal:**
 
-```text
-FakeExtractor
-```
+Introduce an LLM-backed extractor while preserving `FakeExtractor` as the default for deterministic library behavior.
 
-with:
-
-```text
-LLMExtractor
-```
-
-Target flow:
+**Target flow:**
 
 ```text
 DocumentContent
@@ -189,24 +181,24 @@ LLMExtractor
 ExtractionResult
 ```
 
-Tasks:
+**Tasks:**
 
-* [ ] Decide LLM provider
-* [ ] Define LLM configuration
-* [ ] Add configuration management
-* [ ] Implement LLM client
-* [ ] Create LLMExtractor
-* [ ] Send document content and extraction request to the LLM
-* [ ] Request structured output
-* [ ] Parse the LLM response
-* [ ] Handle invalid LLM responses
-* [ ] Handle API errors
-* [ ] Add mocked LLM tests
-* [ ] Keep FakeExtractor for deterministic tests
-* [ ] Make LLMExtractor the default production extractor
-* [ ] Update engine integration tests
+- [x] Decide LLM provider
+- [x] Define LLM configuration
+- [x] Add configuration management
+- [x] Implement LLM client
+- [x] Create LLMExtractor
+- [x] Send document content and extraction request to the LLM
+- [x] Request structured output
+- [x] Parse the LLM response
+- [x] Handle invalid LLM responses
+- [x] Handle API errors
+- [x] Add mocked LLM tests
+- [x] Keep FakeExtractor for deterministic tests
+- [x] Configure LLMExtractor for production API requests
+- [x] Update engine integration tests
 
-Acceptance example:
+**Acceptance example:**
 
 ```text
 invoice.pdf
@@ -225,21 +217,21 @@ invoice.pdf
 }
 ```
 
-### Constraints
+**Constraints:**
 
 The existing architecture must remain intact.
 
 Do not:
 
-* Rewrite DocumentEngine.
-* Remove DocumentExtractor.
-* Remove FakeExtractor.
-* Add RAG.
-* Add vector databases.
-* Add agents.
-* Add queues.
-* Add databases.
-* Add unnecessary infrastructure.
+- Rewrite `DocumentEngine`.
+- Remove `DocumentExtractor`.
+- Remove `FakeExtractor`.
+- Add RAG.
+- Add vector databases.
+- Add agents.
+- Add queues.
+- Add databases.
+- Add unnecessary infrastructure.
 
 The LLM implementation must remain replaceable.
 
@@ -359,7 +351,7 @@ Example:
 
 # 9. Phase 7 — Human Review
 
-**Status: IMPLEMENTED — awaiting final verification**
+**Status: VERIFIED**
 
 Goal:
 
