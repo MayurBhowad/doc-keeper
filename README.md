@@ -30,8 +30,8 @@ FastAPI extraction API are implemented. `DocumentEngine` still uses
 the OpenAI-backed extractor from environment settings. Confidence scores and
 page attribution are model-reported estimates and are not independently
 verified. Human review is explicitly initiated through `ReviewService`; the
-initial HTTP API does not expose review-management endpoints.
-
+initial HTTP API does not expose review-management endpoints. There is no
+command-line interface.
 
 ```text
 Phase 1 — Core Reader
@@ -68,6 +68,203 @@ Phase 10 — Production Infrastructure
 Phase 6 adds optional `field_metadata` to extraction results. Each field can include a `confidence` estimate and `source_pages` list. Schema validation and configured business rules run before storage; validation failures can expose structured issues. Legacy plain-JSON LLM responses remain supported.
 
 Phase 3 is usable by passing `LLMExtractor` into the engine. Phase 4 supports optional Pydantic schemas through `DocumentEngine.process(path, query, schema=InvoiceSchema)`. The schema guides extraction and validates the parsed result before storage.
+
+## Getting Started
+
+The fastest way to see the whole pipeline work is to run the HTTP API locally
+and upload a document. The steps below assume a Linux or macOS shell, run from
+the repository root.
+
+### 1. Set up the Python environment
+
+Python 3.12 or newer is required. Use the project virtual environment in `.venv`:
+
+```bash
+source .venv/bin/activate
+python --version
+```
+
+`.venv/` is git-ignored, so a fresh clone does not include it. Create it first
+if it is missing:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate## Getting Started
+
+The fastest way to see the whole pipeline work is to run the HTTP API locally
+and upload a document. The steps below assume a Linux or macOS shell, run from
+the repository root.
+```
+
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+pip install -e .
+```
+
+`requirements.txt` pins the runtime and test dependencies (including FastAPI,
+Uvicorn, PyMuPDF, and the OpenAI SDK). `pip install -e .` installs the
+`document_reader` package from `src/` in editable mode.
+
+OCR for scanned PDFs needs extra, optional dependencies. See
+[Optional OCR setup](user_guide.md#optional-ocr-setup).
+
+### 3. Configure the environment
+
+The API reads its settings from environment variables. Set them in the same
+shell that will start the server:
+
+```bash
+read -rs OPENAI_API_KEY && export OPENAI_API_KEY   # paste the key; input is hidden
+export OPENAI_MODEL="gpt-5.6-mini"                 # optional, this is the default
+export DOC_KEEPER_OUTPUT_DIR="output"              # optional, this is the default
+```
+
+| Variable | Required | Default | Used for |
+|----------|----------|---------|----------|
+| `OPENAI_API_KEY` | Yes, for the API's default `openai` provider | none | Authenticating to OpenAI |
+| `OPENAI_MODEL` | No | `gpt-5.6-mini` | Model used for extraction |
+| `DOC_KEEPER_OUTPUT_DIR` | No | `output` | Directory where the API writes result JSON |
+
+The code also reads `LLM_PROVIDER` (default `openai`). Set it to `ollama` to use
+a local Ollama server instead; see the
+[User Guide configuration](user_guide.md#configuration).
+
+Doc-Keeper does not load `.env` files. Keep keys in the environment or a secret
+manager, and never commit them.
+
+### 4. Start the API server
+
+```bash
+uvicorn document_reader.api:app --reload
+```
+
+Uvicorn listens on `http://127.0.0.1:8000` by default. The API has no
+authentication, so keep it bound to localhost during local use.
+
+### 5. Check that the server is running
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+```json
+{"status": "ok"}
+```
+
+`/health` only confirms that the server is up. It does not check the LLM
+configuration. A missing `OPENAI_API_KEY` is reported by `/extract` as HTTP 503.
+
+### 6. Explore the API in Swagger UI
+
+Open `http://127.0.0.1:8000/docs` in a browser. FastAPI generates this page from
+the code:
+
+1. Expand **POST /extract** and select **Try it out**.
+2. Choose a `.txt` or `.pdf` file for `file`.
+3. Enter an extraction request in `query`.
+4. Select **Execute** and inspect the response body and status code.
+
+### 7. Run your first extraction
+
+Create a small sample document. `documents/` is git-ignored local data:
+
+```bash
+mkdir -p documents
+cat > documents/invoice.txt <<'EOF'
+Invoice Number: INV-123
+Vendor: ABC Pvt Ltd
+Total: 15000
+EOF
+```
+
+Upload it with a query:
+
+```bash
+curl -sS -X POST http://127.0.0.1:8000/extract \
+  -F "file=@documents/invoice.txt" \
+  -F "query=Extract invoice number, vendor name, and total" \
+  | python -m json.tool
+```
+
+PDFs work the same way, for example with `-F "file=@documents/invoice.pdf"`.
+
+The document text is sent to the configured LLM provider. Only upload documents
+you are permitted to share with that provider.
+
+### 8. Understand the response
+
+Example response (values depend on the document and the model):
+
+```json
+{
+  "filename": "invoice.txt",
+  "data": {
+    "invoice_number": "INV-123",
+    "vendor_name": "ABC Pvt Ltd",
+    "total": 15000
+  },
+  "metadata": {
+    "attempts": 1,
+    "duration_ms": 2140,
+    "model": "gpt-5.6-mini"
+  },
+  "field_metadata": {
+    "invoice_number": {"confidence": 0.98, "source_pages": [1]}
+  }
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `filename` | Base name of the uploaded file |
+| `data` | Fields extracted by the model. The API does not apply a schema, so field names and types depend on the query and the model |
+| `metadata` | Extractor run details: `attempts` (the extractor retries once if the response cannot be parsed or validated), `duration_ms`, and `model` |
+| `field_metadata` | Optional, model-reported `confidence` (0.0–1.0) and 1-based `source_pages` per field. Omitted when the model provides none |
+
+Confidence scores and page numbers are model-reported estimates. They are not
+independently verified.
+
+### 9. Find the stored output
+
+Each successful request also writes a JSON file to `DOC_KEEPER_OUTPUT_DIR`
+(default `output/`, relative to the directory where Uvicorn was started). The
+directory is created if needed.
+
+```bash
+ls -t output/ | head -n 5
+python -m json.tool output/invoice-<request-id>.json
+```
+
+Files are named `<original-name>-<request-id>.json`, where `<request-id>` is a
+random 32-character hex value, so repeated uploads of the same file do not
+overwrite each other. The stored file contains `filename` (the generated name,
+for example `invoice-<request-id>.txt`), `data`, and `field_metadata` when
+present. It does not include `metadata`. The API response does not reveal the
+server's storage path. `output/` is git-ignored because it can contain extracted
+document data.
+
+### API limits and errors
+
+Uploads are limited to 10 MiB. Unsupported extensions return HTTP 415; missing
+fields, empty uploads, unreadable documents, and extraction-validation failures
+return HTTP 422. Oversized uploads return HTTP 413, and a missing LLM
+configuration returns HTTP 503. Unexpected extraction failures return HTTP 500
+with a generic error message. The initial API does not include authentication,
+asynchronous processing, or human-review endpoints. The full status-code table
+is in the [User Guide](user_guide.md#status-codes-and-errors).
+
+### Which extractor runs where
+
+- **HTTP API:** `/extract` always builds a `DocumentEngine` with `LLMExtractor`
+  and the LLM client selected by `LLM_PROVIDER` (OpenAI by default).
+- **Python library:** `DocumentEngine()` defaults to `FakeExtractor`, which
+  returns the query, filename, and document text without calling a model. Pass
+  `LLMExtractor` explicitly to use a model. See
+  [Python library usage](#python-library-usage).
+
+API tests use fake extractors and do not require live OpenAI requests.
 
 ## Documentation
 
@@ -140,6 +337,18 @@ ExtractionResult
 
 When the request includes a schema, `LLMExtractor` asks the model for those fields and validates the parsed JSON before returning it.
 
+### How an API request moves through the pipeline
+
+| Step | Component | What happens in `POST /extract` |
+|------|-----------|----------------------------------|
+| Receive | `document_reader.api` | Checks the extension, streams the upload to a temporary file, and enforces the 10 MiB limit |
+| Read | `ReaderRegistry` → `TextReader` / `PDFReader` | Produces `DocumentContent` with the text and per-page text |
+| Understand request | `ExtractionRequest` | Wraps the `query` (the API does not pass a schema) |
+| Extract | `LLMExtractor` + LLM client | Builds a prompt with page-numbered text, calls the model, and parses the JSON response |
+| Validate | `LLMExtractor` | Checks the JSON object and field metadata, retrying once on failure |
+| Store | `JsonStorage` | Writes `<name>-<request-id>.json` to `DOC_KEEPER_OUTPUT_DIR` |
+| Respond | `document_reader.api` | Returns `filename`, `data`, `metadata`, and `field_metadata`, then deletes the temporary file |
+
 ## Project Structure
 
 ```text
@@ -150,15 +359,17 @@ doc-keeper/
 │
 ├── tests/
 │
-├── documents/
+├── documents/          (local input files, git-ignored)
 │
-├── output/
+├── output/             (extraction results, git-ignored)
 │
 ├── README.md
 ├── PLAN.md
 ├── ARCHITECTURE.md
 ├── user_guide.md
+├── evaluation_guide.md
 ├── requirements.txt
+├── pyproject.toml
 └── .gitignore
 ```
 
@@ -218,9 +429,11 @@ The early stages focus on running and testing the core engine locally.
 
 Production infrastructure will be introduced only when the project actually requires it.
 
-## Current Usage
+## Python Library Usage
 
-With the package installed, the engine reads a `.txt` or `.pdf` file, runs the default extractor, and writes JSON under `output/`:
+The HTTP API is a thin layer over `DocumentEngine`, which can also be called
+directly from Python. With the package installed, the engine reads a `.txt` or
+`.pdf` file, runs the default extractor, and writes JSON under `output/`:
 
 ```python
 from document_reader.engine import DocumentEngine
@@ -234,83 +447,20 @@ result = engine.process(
 
 `FakeExtractor` returns the query, filename, and document text. It does not call a model.
 
-To extract with OpenAI, pass `LLMExtractor` explicitly. Set `OPENAI_API_KEY` in the environment. See the [User Guide](user_guide.md).
-
-## HTTP API
-
-The initial HTTP API exposes document extraction through FastAPI.
-
-### Configuration
-
-Install the project dependencies:
-
-```bash
-pip install -r requirements.txt
-pip install -e .
-```
-
-Configure the OpenAI API key and, optionally, the model and output directory:
-
-```bash
-export OPENAI_API_KEY="your-api-key"
-export OPENAI_MODEL="gpt-5.6-mini"
-export DOC_KEEPER_OUTPUT_DIR="output"
-```
-
-Start the local development server:
-
-```bash
-uvicorn document_reader.api:app --reload
-```
-
-The API is available at `http://127.0.0.1:8000`. Interactive API documentation
-is available at `/docs`.
-
-### Health check
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-Example response:
-
-```json
-{"status": "ok"}
-```
-
-### Extract from a document
-
-Send a multipart request containing a `.txt` or `.pdf` file and a query:
-
-```bash
-curl -X POST http://127.0.0.1:8000/extract \
-  -F "file=@invoice.pdf" \
-  -F "query=Extract invoice number, vendor name, and total"
-```
-
-The response contains the original filename, extracted `data`, and any
-available `metadata` or `field_metadata`. The API does not return the server's
-storage path. Results are also saved by the configured JSON storage component.
-
-Uploads are limited to 10 MiB. Unsupported extensions return HTTP 415; missing
-fields, empty uploads, unreadable documents, and extraction-validation failures
-return HTTP 422. Unexpected extraction failures return HTTP 500 with a generic
-error message. The initial API does not include authentication, asynchronous
-processing, or human-review endpoints.
-
-The API uses the existing `DocumentEngine` and configures an
-`LLMExtractor`; API tests use fake extractors and do not require live OpenAI
-requests.
+To extract with OpenAI, pass `LLMExtractor` explicitly. Set `OPENAI_API_KEY` in the environment. Unlike the API, the library writes to `JsonStorage`'s default `output/` directory and does not read `DOC_KEEPER_OUTPUT_DIR`; pass `JsonStorage("path")` to change it. Schemas, business rules, and human review are available only from Python. See the [User Guide](user_guide.md).
 
 ## Development
 
 Python 3.12 or newer is required.
 
 ```bash
+source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
 pytest
 ```
+
+The test suite does not call live LLM services.
 
 ## Roadmap
 
